@@ -19,12 +19,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
+      - name: Sync with latest default branch
+        shell: pwsh
+        run: |
+          $branch = "${{ github.event.repository.default_branch }}"
+          if ([string]::IsNullOrWhiteSpace($branch)) {
+            $branch = "main"
+          }
+
+          git fetch origin $branch
+          git checkout $branch
+          git reset --hard "origin/$branch"
+
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
