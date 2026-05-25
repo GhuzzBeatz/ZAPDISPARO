@@ -95,7 +95,9 @@ input:focus{border-color:#25d366}
 var SALT   = 'GHZ2026ZAPDISPARO';
 var PREFIX = 'ZAPDISP';
 var LS_KEY = 'ghz_zapdisparo_licencas';
-var DRIVE  = 'https://drive.google.com/file/d/1vJgihkZ96WRgJpm_IJTI-MRRb9P23_kH/view?usp=sharing';
+var MANIFEST_URL = 'https://raw.githubusercontent.com/GhuzzBeatz/ZAPDISPARO/main/update-manifest.json';
+var DRIVE_FALLBACK = 'https://drive.google.com/file/d/1vJgihkZ96WRgJpm_IJTI-MRRb9P23_kH/view?usp=sharing';
+var DRIVE  = DRIVE_FALLBACK;
 
 var chaveAtual = '';
 
@@ -194,7 +196,23 @@ function renderLista() {
     '</div>';
   }).join('');
 }
+
+async function atualizarLinkDownload() {
+  try {
+    var res = await fetch(MANIFEST_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('manifest http ' + res.status);
+    var manifest = await res.json();
+    if (manifest && typeof manifest.download_url === 'string' && manifest.download_url.trim()) {
+      DRIVE = manifest.download_url.trim();
+      atualizarMsg();
+    }
+  } catch (e) {
+    console.warn('Nao foi possivel carregar link dinamico de update-manifest.json. Usando fallback.', e);
+  }
+}
+
 badge();renderLista();
+atualizarLinkDownload();
 </script>
 </body>
 </html>
