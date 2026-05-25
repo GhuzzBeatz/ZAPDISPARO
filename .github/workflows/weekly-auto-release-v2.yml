@@ -74,9 +74,33 @@ jobs:
             Write-Host "Sem mudancas em package.json/package-lock.json"
           }
 
+      - name: Create or update GitHub release
+        id: release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: ZapDisparo ${{ env.APP_VERSION }}
+          body: Atualizacao automatica semanal.
+          files: |
+            ${{ env.SETUP_PATH }}
+          overwrite_files: true
+
+      - name: Resolve uploaded asset name
+        shell: pwsh
+        run: |
+          $assetsJson = '${{ steps.release.outputs.assets }}'
+          $assets = $assetsJson | ConvertFrom-Json
+          $asset = $assets | Where-Object { $_.name -like '*.exe' } | Select-Object -First 1
+
+          if (-not $asset -or -not $asset.name) {
+            throw 'Nao foi possivel identificar o nome do asset .exe publicado na release.'
+          }
+
+          "RELEASE_ASSET_NAME=$($asset.name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Update update-manifest.json
         run: >
-          node scripts/write-update-manifest.js --version "$env:APP_VERSION" --asset "$env:SETUP_NAME" --repo "$env:GITHUB_REPOSITORY" --out "update-manifest.json" --notes "Atualizacao automatica semanal."
+          node scripts/write-update-manifest.js --version "$env:APP_VERSION" --asset "$env:RELEASE_ASSET_NAME" --repo "$env:GITHUB_REPOSITORY" --out "update-manifest.json" --notes "Atualizacao automatica semanal."
 
       - name: Commit and push updated manifest
         shell: pwsh
@@ -92,13 +116,3 @@ jobs:
           } else {
             Write-Host "Manifesto sem mudancas"
           }
-
-      - name: Create or update GitHub release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: v${{ env.APP_VERSION }}
-          name: ZapDisparo ${{ env.APP_VERSION }}
-          body: Atualizacao automatica semanal.
-          files: |
-            ${{ env.SETUP_PATH }}
-          overwrite_files: true
