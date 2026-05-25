@@ -39,7 +39,7 @@ Sem esse secret, o workflow roda normal, mas nao envia aviso no WhatsApp.
 O workflow atualiza automaticamente `update-manifest.json` na branch `main`.
 Use esta URL no cliente:
 
-`https://raw.githubusercontent.com/GhuzzBeatz/repositorio-para-codex-pc-mantris/main/update-manifest.json`
+`https://raw.githubusercontent.com/GhuzzBeatz/ZAPDISPARO/main/update-manifest.json`
 
 ## 5) Configurar os clientes para usar o manifesto remoto
 No cliente, arquivo de dados do app:
@@ -48,7 +48,7 @@ No cliente, arquivo de dados do app:
 Conteudo:
 ```json
 {
-  "manifestUrl": "https://raw.githubusercontent.com/GhuzzBeatz/repositorio-para-codex-pc-mantris/main/update-manifest.json"
+  "manifestUrl": "https://raw.githubusercontent.com/GhuzzBeatz/ZAPDISPARO/main/update-manifest.json"
 }
 ```
 
@@ -72,3 +72,4 @@ O workflow vai:
 - Atualizacao de WhatsApp/Chromium e feita por **novo pacote do app** (setup), nao por troca de arquivo avulso.
 - Se usar branch protegida com bloqueio de push por bot, o workflow precisa excecao.
 - Se quiser mudar horario semanal, edite a linha `cron` em `.github/workflows/weekly-auto-release.yml`.
+

@@ -66,7 +66,7 @@ function salvarJSON(nome, dados) {
   fs.writeFileSync(path.join(dir, nome+'.json'), JSON.stringify(dados, null, 2))
 }
 
-const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/GhuzzBeatz/repositorio-para-codex-pc-mantris/main/update-manifest.json'
+const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/GhuzzBeatz/ZAPDISPARO/main/update-manifest.json'
 const UPDATE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
 function cmpVersao(a, b) {
@@ -1220,5 +1220,6 @@ app.on('window-all-closed', async () => {
   await desconectarWpp(true)
   if (process.platform !== 'darwin') app.quit()
 })
+
 
 
