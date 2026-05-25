@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/util.js"></script>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Conexao WhatsApp</div>
+      <div class="page-sub">Conecte seu WhatsApp para disparar mensagens</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="form-card">
+      <div class="form-card-title">QR CODE</div>
+      <div style="text-align:center;padding:20px">
+        <div id="estDesconectado">
+          <div style="font-size:40px;margin-bottom:12px">[ ]</div>
+          <div style="font-size:15px;font-weight:700;color:var(--fg);margin-bottom:6px">Desconectado</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Clique em Conectar para gerar o QR Code</div>
+          <button class="btn btn-primary" onclick="conectar()" style="font-size:15px;padding:12px 32px">Conectar WhatsApp</button>
+        </div>
+
+        <div id="estConectando" style="display:none">
+          <div style="font-size:40px;margin-bottom:12px">...</div>
+          <div style="font-size:15px;font-weight:700;color:var(--yellow)">Iniciando...</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px;margin-bottom:14px">Pode levar ate 1 minuto na primeira vez</div>
+          <div id="logConectando" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:120px;overflow-y:auto;text-align:left;font-size:11px;color:var(--fg2);line-height:1.8;width:100%">Aguardando...</div>
+          <button class="btn btn-ghost" onclick="desconectar()" style="margin-top:12px;font-size:12px">Cancelar</button>
+        </div>
+
+        <div id="estQR" style="display:none">
+          <div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:14px">Escaneie com o WhatsApp</div>
+          <div class="qr-box" id="qrImagem" style="margin:0 auto 14px"></div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.8">
+            WhatsApp -> 3 pontinhos -><br>
+            <b>Aparelhos Conectados</b> -> <b>Conectar um Aparelho</b>
+          </div>
+          <button class="btn btn-ghost" onclick="conectar()" style="margin-top:12px">Gerar novo QR Code</button>
+        </div>
+
+        <div id="estConectado" style="display:none">
+          <div style="font-size:40px;margin-bottom:12px">OK</div>
+          <div style="font-size:18px;font-weight:900;color:var(--primary)">WhatsApp Conectado</div>
+          <div id="infoNumero" style="font-size:14px;color:var(--fg);margin-top:8px;font-weight:700"></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Pronto para disparar mensagens</div>
+          <div style="margin-top:18px"><button class="btn btn-red" onclick="desconectar()">Desconectar</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="form-card" style="margin-bottom:14px">
+        <div class="form-card-title">ACOES</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-primary" onclick="conectar()" style="justify-content:flex-start;padding:11px 16px">Conectar / Gerar QR Code</button>
+          <button class="btn btn-ghost" onclick="desconectar()" style="justify-content:flex-start;padding:11px 16px">Desconectar</button>
+          <div style="height:1px;background:var(--border);margin:4px 0"></div>
+          <button class="btn btn-ghost" onclick="limpar()" style="justify-content:flex-start;padding:11px 16px;color:var(--red)">Limpar Sessao (novo QR Code)</button>
+          <button class="btn btn-ghost" onclick="verificarAtualizacao()" style="justify-content:flex-start;padding:11px 16px">Atualizar App (WhatsApp + Chromium)</button>
+          <button class="btn btn-ghost" onclick="executarRotinaSemanalAgora()" style="justify-content:flex-start;padding:11px 16px">Executar rotina semanal agora</button>
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--fg2)">
+          <input type="checkbox" id="weeklyAutoCheck" onchange="alterarSemanal(this.checked)" style="width:15px;height:15px">
+          Checar atualizacao semanal ao abrir o app
+        </label>
+        <div id="weeklyInfo" style="display:none;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.7"></div>
+        <div id="updateStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--muted)"></div>
+        <div id="engineInfo" style="display:none;margin-top:10px;padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);font-size:11px;color:var(--fg2);line-height:1.7"></div>
+        <div class="aviso av-ok" id="avisoOk" style="margin-top:10px"></div>
+        <div class="aviso av-erro" id="avisoErro" style="margin-top:10px"></div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">COMO CONECTAR</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;gap:10px">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--primary);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">1</div>
+            <div style="font-size:13px;color:var(--fg2)">Clique em <b>Conectar</b> e aguarde o QR Code aparecer</div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--primary);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">2</div>
+            <div style="font-size:13px;color:var(--fg2)">No celular: WhatsApp -> <b>3 pontinhos</b> -> <b>Aparelhos Conectados</b> -> <b>Conectar um Aparelho</b></div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <div style="width:24px;height:24px;border-radius:50%;background:var(--primary);color:#000;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0">3</div>
+            <div style="font-size:13px;color:var(--fg2)">Aponte para o QR Code. Conectado.</div>
+          </div>
+          <div style="background:var(--ybg);border:1px solid rgba(251,191,36,.25);border-radius:8px;padding:10px;font-size:12px;color:var(--fg2)">
+            O celular precisa estar com internet. A sessao fica salva e reconecta automaticamente.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let botStatus = 'desconectado'
+let pollInterval = null
+let atualizando = false
+
+function formatarDataHoraLocal(iso) {
+  if (!iso) return 'nunca'
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return 'nunca'
+  return dt.toLocaleString('pt-BR')
+}
+
+function setUpdateStatus(texto, tipo) {
+  const el = document.getElementById('updateStatus')
+  if (!el) return
+  if (!texto) {
+    el.style.display = 'none'
+    el.textContent = ''
+    return
+  }
+  el.style.display = 'block'
+  el.textContent = texto
+  if (tipo === 'erro') {
+    el.style.color = 'var(--red)'
+  } else if (tipo === 'ok') {
+    el.style.color = 'var(--primary)'
+  } else {
+    el.style.color = 'var(--muted)'
+  }
+}
+
+function atualizarInfoSemanal(data) {
+  const box = document.getElementById('weeklyInfo')
+  const chk = document.getElementById('weeklyAutoCheck')
+  if (!box || !chk) return
+  chk.checked = !!data?.weeklyEnabled
+  box.style.display = 'block'
+  box.innerHTML =
+    'Ultima verificacao: <b>' + formatarDataHoraLocal(data?.lastCheckAt) + '</b><br>' +
+    'Proxima verificacao: <b>' + formatarDataHoraLocal(data?.nextCheckAt) + '</b>'
+}
+
+async function carregarStatusSemanal() {
+  const r = await ipcRenderer.invoke('app:update-weekly-status')
+  if (!r || !r.ok) return
+  atualizarInfoSemanal(r)
+}
+
+async function alterarSemanal(enabled) {
+  const r = await ipcRenderer.invoke('app:update-weekly-set-enabled', enabled)
+  if (!r || !r.ok) return
+  atualizarInfoSemanal(r)
+  aviso('ok', enabled ? 'Checagem semanal ativada.' : 'Checagem semanal desativada.')
+}
+
+function renderEngineInfo(info) {
+  const el = document.getElementById('engineInfo')
+  if (!el) return
+  if (!info || !info.appVersion) {
+    el.style.display = 'none'
+    return
+  }
+  const navegador = info.navegadorPath
+    ? info.navegadorPath
+    : 'Nao encontrado'
+  el.style.display = 'block'
+  el.innerHTML =
+    '<b>Motor de Atualizacao</b><br>' +
+    'App: v' + info.appVersion + '<br>' +
+    'WhatsApp (lib): ' + (info.whatsappWebJsVersion || 'desconhecida') + '<br>' +
+    'Navegador detectado: ' + navegador + '<br>' +
+    'WhatsApp: ' + info.regraAtualizacaoWhatsapp + '<br>' +
+    'Chrome/Chromium: ' + info.regraAtualizacaoChrome
+}
+
+async function carregarInfoMotores() {
+  const info = await ipcRenderer.invoke('app:engine-status')
+  renderEngineInfo(info)
+}
+
+async function aplicarResultadoUpdate(r, origem) {
+  if (!r || !r.ok) {
+    const msg = r && r.configured === false
+      ? 'Atualizador nao configurado. Defina manifestUrl em data/update_config.json ou use update-manifest.json ao lado do app.'
+      : `Falha ao verificar atualizacao: ${r?.message || 'erro desconhecido'}`
+    setUpdateStatus(msg, 'erro')
+    if (origem === 'manual') aviso('erro', msg)
+    return
+  }
+
+  if (!r.hasUpdate) {
+    const msg = `Aplicativo atualizado (versao ${r.currentVersion}) - pacote WhatsApp + Chromium em dia.`
+    setUpdateStatus(msg, 'ok')
+    if (origem === 'manual') aviso('ok', msg)
+    return
+  }
+
+  const pergunta = `Nova versao encontrada (${r.latestVersion}). Deseja baixar e instalar agora? Isso atualiza app + motor WhatsApp + Chromium.`
+  confirmar(pergunta, async (ok) => {
+    if (!ok) return
+    atualizando = true
+    setUpdateStatus('Iniciando download...', '')
+    const dl = await ipcRenderer.invoke('app:update-download-install', {
+      downloadUrl: r.downloadUrl,
+      latestVersion: r.latestVersion
+    })
+    atualizando = false
+    if (!dl || !dl.ok) {
+      const msg = `Falha ao baixar atualizacao: ${dl?.message || 'erro desconhecido'}`
+      setUpdateStatus(msg, 'erro')
+      aviso('erro', msg)
+      return
+    }
+    setUpdateStatus('Download concluido. Abrindo instalador...', 'ok')
+  }, 'Baixar agora')
+}
+
+function mostrar(est) {
+  ['Desconectado', 'Conectando', 'QR', 'Conectado'].forEach((e) => {
+    document.getElementById(`est${e}`).style.display = e === est ? 'block' : 'none'
+  })
+}
+
+async function checarStatus() {
+  const r = await ipcRenderer.invoke('wpp:status')
+  if (!r) return
+  botStatus = r.status
+
+  if (r.status === 'desconectado') {
+    mostrar('Desconectado')
+  } else if (r.status === 'conectando' || r.status === 'autenticado') {
+    mostrar('Conectando')
+  } else if (r.status === 'aguardando_qr') {
+    mostrar('QR')
+  } else if (r.status === 'conectado') {
+    mostrar('Conectado')
+    if (r.info?.numero) {
+      document.getElementById('infoNumero').textContent = `Numero: +${r.info.numero}${r.info.nome ? ` - ${r.info.nome}` : ''}`
+    }
+    clearInterval(pollInterval)
+  }
+}
+
+async function conectar() {
+  mostrar('Conectando')
+  const r = await ipcRenderer.invoke('wpp:iniciar')
+  if (r && r.ok === false) {
+    aviso('erro', r.message || 'Falha ao iniciar conexao do WhatsApp.')
+    mostrar('Desconectado')
+    return
+  }
+  clearInterval(pollInterval)
+  pollInterval = setInterval(checarStatus, 3000)
+}
+
+async function desconectar() {
+  await ipcRenderer.invoke('wpp:desconectar')
+  checarStatus()
+}
+
+async function limpar() {
+  confirmar('Limpar sessao? Sera necessario escanear o QR Code novamente.', async (ok) => {
+    if (!ok) return
+    await ipcRenderer.invoke('wpp:limpar')
+    mostrar('Desconectado')
+    aviso('ok', 'Sessao limpa.')
+  }, 'Limpar')
+}
+
+async function verificarAtualizacao() {
+  if (atualizando) return
+  setUpdateStatus('Verificando atualizacao do app (WhatsApp + Chromium)...', '')
+  const r = await ipcRenderer.invoke('app:update-check')
+  await aplicarResultadoUpdate(r, 'manual')
+}
+
+async function executarRotinaSemanalAgora() {
+  if (atualizando) return
+  setUpdateStatus('Executando rotina semanal de atualizacao...', '')
+  const r = await ipcRenderer.invoke('app:update-weekly-run', { force: true })
+  atualizarInfoSemanal(r)
+  await carregarInfoMotores()
+  if (!r || !r.ok) {
+    setUpdateStatus('Falha na rotina semanal.', 'erro')
+    aviso('erro', 'Falha na rotina semanal.')
+    return
+  }
+  if (!r.updateCheck) {
+    setUpdateStatus('Rotina semanal executada sem checagem de update.', 'ok')
+    aviso('ok', 'Rotina semanal executada.')
+    return
+  }
+  await aplicarResultadoUpdate(r.updateCheck, 'manual')
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.tipo === 'zd:wstatus') {
+    botStatus = e.data.dados.status
+    checarStatus()
+  }
+
+  if (e.data.tipo === 'zd:qr') {
+    mostrar('QR')
+    const d = e.data.dados
+    if (d && d.qr) {
+      const img = document.createElement('img')
+      img.src = d.qr
+      img.style.cssText = 'width:240px;height:240px;display:block;margin:0 auto;border-radius:8px'
+      const box = document.getElementById('qrImagem')
+      box.innerHTML = ''
+      box.appendChild(img)
+    }
+  }
+
+  if (e.data.tipo === 'zd:log') {
+    const logEl = document.getElementById('logConectando')
+    if (logEl && (botStatus === 'conectando' || botStatus === 'aguardando_qr')) {
+      const div = document.createElement('div')
+      div.textContent = e.data.dados.texto
+      logEl.appendChild(div)
+      logEl.scrollTop = logEl.scrollHeight
+    }
+  }
+
+  if (e.data.tipo === 'zd:update_status') {
+    const d = e.data.dados || {}
+    if (d.state === 'error') {
+      setUpdateStatus(d.text || 'Erro no atualizador.', 'erro')
+      aviso('erro', d.text || 'Erro no atualizador.')
+    } else if (d.state === 'ready') {
+      setUpdateStatus(d.text || 'Atualizacao pronta para instalar.', 'ok')
+      aviso('ok', d.text || 'Atualizacao pronta.')
+    } else {
+      setUpdateStatus(d.text || 'Atualizando...', '')
+    }
+  }
+})
+
+async function inicializarPainel() {
+  checarStatus()
+  pollInterval = setInterval(checarStatus, 3000)
+  await carregarStatusSemanal()
+  await carregarInfoMotores()
+
+  // Checagem semanal automatica (silenciosa) quando estiver vencida.
+  const auto = await ipcRenderer.invoke('app:update-weekly-run', { force: false })
+  if (auto && auto.ok) {
+    atualizarInfoSemanal(auto)
+    if (auto.checked && auto.updateCheck?.ok && auto.updateCheck.hasUpdate) {
+      setUpdateStatus(`Atualizacao semanal encontrou nova versao (${auto.updateCheck.latestVersion}).`, 'ok')
+      aviso('ok', `Nova versao disponivel (${auto.updateCheck.latestVersion}). Clique em "Atualizar App (WhatsApp + Chromium)" para instalar.`)
+    }
+  }
+}
+
+inicializarPainel()
+</script>
+</body>
+</html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">👥 Listas de Contatos</div><div class="page-sub">Salve e gerencie suas listas para reutilizar nos disparos</div></div>
+    <button class="btn btn-primary" onclick="novaLista()" style="align-self:center">+ Nova Lista</button>
+  </div>
+
+  <div id="listaCards"></div>
+</div>
+
+<!-- MODAL CRIAR/EDITAR LISTA -->
+<div class="modal-ov" id="modalLista" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal-box wide">
+    <div class="modal-title" id="modalTitulo">Nova Lista</div>
+    <input type="hidden" id="listaIdx">
+
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Nome da Lista *</label>
+      <input id="listaNome" placeholder="Ex: Clientes Premium, Leads Janeiro...">
+    </div>
+
+    <!-- Abas de importação -->
+    <div style="display:flex;gap:6px;margin-bottom:14px">
+      <button class="aba active" id="maba-excel"  onclick="setModalAba('excel')">📊 Excel/CSV</button>
+      <button class="aba"        id="maba-manual" onclick="setModalAba('manual')">✏️ Manual</button>
+    </div>
+
+    <div id="msec-excel">
+      <div style="background:var(--primary-bg);border:1px solid var(--primary-bdr);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg2);margin-bottom:10px;line-height:1.7">
+        Coluna obrigatória: <b>telefone</b> (ou <b>numero</b>/<b>celular</b>)<br>
+        Colunas opcionais: <b>nome</b>, <b>empresa</b>, <b>produto</b>, <b>valor</b>, <b>campo1</b>, <b>campo2</b>
+      </div>
+      <button class="btn btn-ghost" onclick="importarParaModal()">📂 Selecionar Excel/CSV</button>
+      <div id="mexcelInfo" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
+    </div>
+
+    <div id="msec-manual" style="display:none">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Um por linha: 11999999999 ou 11999999999|Nome|Empresa</div>
+      <textarea id="mcontatosManual" style="min-height:140px;font-family:monospace;font-size:13px" placeholder="11999999999&#10;21988887777|Maria Silva&#10;31977776666|João Santos|Empresa ABC"></textarea>
+    </div>
+
+    <!-- Preview dos contatos importados -->
+    <div id="mpreview" style="display:none;margin-top:14px">
+      <div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">
+        Contatos (<span id="mpreviewCount">0</span>)
+      </div>
+      <div id="mpreviewTabela" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px"></div>
+    </div>
+
+    <div class="modal-acts">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalLista').style.display='none'">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarLista()">💾 Salvar Lista</button>
+    </div>
+    <div class="aviso av-ok"  id="avisoOk"></div>
+    <div class="aviso av-erro" id="avisoErro"></div>
+  </div>
+</div>
+
+<style>
+.aba{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.aba.active{border-color:var(--primary);background:var(--primary-bg);color:var(--fg)}
+</style>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let contatosModal = []
+
+async function carregar() {
+  const listas = await ipcRenderer.invoke('listas:ler') || []
+  const el     = document.getElementById('listaCards')
+  if (!listas.length) {
+    el.innerHTML = `<div class="sec-card"><div style="padding:40px;text-align:center;color:var(--muted)">
+      Nenhuma lista criada. Clique em <b>+ Nova Lista</b> para começar.</div></div>`
+    return
+  }
+  el.innerHTML = listas.map((l, idx) => `
+    <div class="sec-card" style="margin-bottom:12px">
+      <div class="sec-head">
+        <div style="display:flex;align-items:center;gap:10px">
+          👥 <span style="font-size:15px;font-weight:800">${l.nome}</span>
+          <span class="badge b-green">${l.contatos?.length||0} contatos</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="editarLista(${idx})" style="font-size:12px">✏️ Editar</button>
+          <button class="btn-danger" onclick="excluirLista(${idx})">🗑️</button>
+        </div>
+      </div>
+      <div style="padding:12px 18px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2)">Telefone</th>
+            <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2)">Nome</th>
+            <th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2)">Empresa</th>
+          </tr></thead>
+          <tbody>
+          ${(l.contatos||[]).slice(0,5).map(c=>`
+            <tr style="border-top:1px solid var(--border)">
+              <td style="padding:7px 10px;font-family:monospace;font-size:12px">${c.telefone||c.numero||''}</td>
+              <td style="padding:7px 10px;font-size:12px;color:var(--fg2)">${c.nome||'—'}</td>
+              <td style="padding:7px 10px;font-size:12px;color:var(--muted)">${c.empresa||'—'}</td>
+            </tr>`).join('')}
+          ${l.contatos?.length > 5 ? `<tr><td colspan="3" style="padding:7px 10px;font-size:12px;color:var(--muted);border-top:1px solid var(--border)">... e mais ${l.contatos.length-5} contatos</td></tr>` : ''}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('')
+}
+
+function novaLista() {
+  document.getElementById('listaIdx').value    = ''
+  document.getElementById('listaNome').value   = ''
+  document.getElementById('mcontatosManual').value = ''
+  document.getElementById('mexcelInfo').textContent= ''
+  document.getElementById('modalTitulo').textContent= 'Nova Lista'
+  contatosModal = []
+  renderPreviewModal()
+  setModalAba('excel')
+  document.getElementById('modalLista').style.display='flex'
+}
+
+function editarLista(idx) {
+  ipcRenderer.invoke('listas:ler').then(listas => {
+    const l = listas[idx]
+    document.getElementById('listaIdx').value  = idx
+    document.getElementById('listaNome').value = l.nome
+    document.getElementById('modalTitulo').textContent = 'Editar Lista'
+    contatosModal = l.contatos || []
+    renderPreviewModal()
+    setModalAba('excel')
+    document.getElementById('modalLista').style.display='flex'
+  })
+}
+
+function excluirLista(idx) {
+  confirmar('Excluir esta lista de contatos?', async ok => {
+    if (!ok) return
+    const listas = await ipcRenderer.invoke('listas:ler') || []
+    listas.splice(idx, 1)
+    await ipcRenderer.invoke('listas:salvar', listas)
+    carregar()
+  })
+}
+
+function setModalAba(aba) {
+  document.getElementById('msec-excel').style.display  = aba==='excel'?'block':'none'
+  document.getElementById('msec-manual').style.display = aba==='manual'?'block':'none'
+  document.getElementById('maba-excel').classList.toggle('active', aba==='excel')
+  document.getElementById('maba-manual').classList.toggle('active', aba==='manual')
+}
+
+async function importarParaModal() {
+  const r = await ipcRenderer.invoke('importar:arquivo')
+  if (!r.ok) { if(r.motivo!=='cancelado') avisoModal('Erro: '+r.motivo); return }
+  contatosModal = r.dados.filter(row => {
+    const tel = (row.telefone||row.numero||row.celular||'').toString().replace(/\D/g,'')
+    return tel.length >= 8
+  }).map(row => ({
+    telefone: (row.telefone||row.numero||row.celular||'').toString().replace(/\D/g,''),
+    nome:     row.nome||'', empresa: row.empresa||'',
+    produto:  row.produto||'', valor: row.valor||'',
+    campo1:   row.campo1||'', campo2: row.campo2||''
+  }))
+  document.getElementById('mexcelInfo').textContent = `✅ ${r.arquivo} — ${contatosModal.length} contato(s) importado(s)`
+  renderPreviewModal()
+}
+
+function renderPreviewModal() {
+  const el = document.getElementById('mpreview')
+  if (!contatosModal.length) { el.style.display='none'; return }
+  el.style.display='block'
+  document.getElementById('mpreviewCount').textContent = contatosModal.length
+  const rows = contatosModal.slice(0,8)
+  document.getElementById('mpreviewTabela').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2);text-align:left">Telefone</th>
+        <th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2);text-align:left">Nome</th>
+        <th style="padding:6px 10px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;background:var(--bg2);text-align:left">Empresa</th>
+      </tr></thead>
+      <tbody>${rows.map(c=>`
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:6px 10px;font-family:monospace;font-size:12px">${c.telefone}</td>
+          <td style="padding:6px 10px;font-size:12px;color:var(--fg2)">${c.nome||'—'}</td>
+          <td style="padding:6px 10px;font-size:12px;color:var(--muted)">${c.empresa||'—'}</td>
+        </tr>`).join('')}
+      ${contatosModal.length>8?`<tr><td colspan="3" style="padding:6px 10px;font-size:12px;color:var(--muted)">... e mais ${contatosModal.length-8}</td></tr>`:''}
+      </tbody>
+    </table>`
+}
+
+async function salvarLista() {
+  const nome = document.getElementById('listaNome').value.trim()
+  if (!nome) return aviso('erro','Informe o nome da lista.')
+
+  // Processar manual se estiver na aba manual
+  const abaMod = document.getElementById('msec-manual').style.display !== 'none'
+  if (abaMod) {
+    const linhas = document.getElementById('mcontatosManual').value.split('\n').map(l=>l.trim()).filter(Boolean)
+    contatosModal = linhas.map(linha => {
+      const partes  = linha.split('|')
+      const telefone = (partes[0]||'').replace(/\D/g,'')
+      return { telefone, nome: partes[1]?.trim()||'', empresa: partes[2]?.trim()||'' }
+    }).filter(c => c.telefone.length >= 8)
+  }
+
+  if (!contatosModal.length) return aviso('erro','Adicione pelo menos um contato válido.')
+
+  const listas = await ipcRenderer.invoke('listas:ler') || []
+  const idx    = document.getElementById('listaIdx').value
+  const nova   = { nome, contatos: contatosModal, criado_em: new Date().toLocaleDateString('pt-BR') }
+  if (idx !== '') listas[Number(idx)] = nova
+  else            listas.push(nova)
+  await ipcRenderer.invoke('listas:salvar', listas)
+  document.getElementById('modalLista').style.display='none'
+  aviso('ok','Lista salva!')
+  carregar()
+}
+
+carregar()
+</script>
+</body></html>

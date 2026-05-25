@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">🏠 Dashboard</div><div class="page-sub" id="dataHoje"></div></div>
+    <button class="btn btn-primary" onclick="parent.ir('pages/disparo.html',null)" style="align-self:center;font-size:14px;padding:10px 22px">🚀 Novo Disparo</button>
+  </div>
+
+  <!-- STATUS WPP -->
+  <div class="form-card" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div id="wppIcone" style="font-size:42px">📵</div>
+      <div>
+        <div id="wppTitulo" style="font-size:16px;font-weight:800;color:var(--fg)">WhatsApp Desconectado</div>
+        <div id="wppDesc"   style="font-size:12px;color:var(--muted);margin-top:3px">Os disparos NÃO serão enviados. Conecte em Conexão WhatsApp.</div>
+      </div>
+      <div style="margin-left:auto">
+        <button class="btn btn-ghost" onclick="parent.ir('pages/conexao.html',null)">Gerenciar →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card"><div><div class="kpi-label">Total de Contatos</div><div class="kpi-val" id="kpiContatos">0</div></div><div class="kpi-icon ki-b">👥</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Modelos Salvos</div><div class="kpi-val"  id="kpiModelos">0</div></div><div class="kpi-icon ki-y">📝</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Disparos Realizados</div><div class="kpi-val" id="kpiDisparos">0</div></div><div class="kpi-icon ki-g">🚀</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Mensagens Enviadas</div><div class="kpi-val" id="kpiMensagens">0</div></div><div class="kpi-icon ki-o">📤</div></div>
+  </div>
+
+  <!-- HISTÓRICO RECENTE -->
+  <div class="tbl-wrap">
+    <div class="tbl-top">
+      <span class="tbl-title">📊 Últimos Disparos</span>
+      <button class="btn btn-ghost" onclick="parent.ir('pages/historico.html',null)" style="font-size:12px">Ver todos →</button>
+    </div>
+    <table>
+      <thead><tr><th>Campanha</th><th>Data</th><th style="text-align:center">Total</th><th style="text-align:center">Enviados</th><th style="text-align:center">Erros</th></tr></thead>
+      <tbody id="tbodyHist"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+document.getElementById('dataHoje').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})
+
+async function carregar() {
+  const contatos  = await ipcRenderer.invoke('listas:ler')  || []
+  const modelos   = await ipcRenderer.invoke('templates:ler')   || []
+  const historico = await ipcRenderer.invoke('hist:ler') || []
+  document.getElementById('kpiContatos').textContent  = contatos.length
+  document.getElementById('kpiModelos').textContent   = modelos.length
+  document.getElementById('kpiDisparos').textContent  = historico.length
+  const totalEnv = historico.reduce((s,h)=>s+(h.enviados||0),0)
+  document.getElementById('kpiMensagens').textContent = totalEnv
+
+  const rec = historico.slice(0,8)
+  document.getElementById('tbodyHist').innerHTML = rec.length ? rec.map(h=>`
+    <tr>
+      <td><b style="color:var(--fg)">${h.nome||'Disparo'}</b></td>
+      <td style="font-size:12px;color:var(--muted)">${h.data||''} ${h.hora||''}</td>
+      <td style="text-align:center">${h.total||0}</td>
+      <td style="text-align:center;color:var(--green);font-weight:700">${h.enviados||0}</td>
+      <td style="text-align:center;color:var(--red)">${h.erros||0}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty">Nenhum disparo realizado ainda.</td></tr>'
+}
+
+ipcRenderer.invoke('zd:wstatus').then(r => atualizarWpp(r.status))
+window.addEventListener('message', e => { if (e.data.tipo==='zd:wstatus') atualizarWpp(e.data.dados.status) })
+
+function atualizarWpp(status) {
+  const ic = {desconectado:'📵',conectando:'⏳',aguardando_qr:'📲',conectado:'✅'}
+  const ti = {desconectado:'WhatsApp Desconectado',conectando:'Conectando...',aguardando_qr:'Aguardando QR Code',conectado:'WhatsApp Conectado ✅'}
+  const de = {desconectado:'Os disparos NÃO serão enviados. Conecte em Conexão WhatsApp.',conectando:'Aguarde...',aguardando_qr:'Escaneie o QR Code.',conectado:'Pronto para disparar mensagens!'}
+  document.getElementById('wppIcone').textContent  = ic[status]||'❓'
+  document.getElementById('wppTitulo').textContent = ti[status]||status
+  document.getElementById('wppDesc').textContent   = de[status]||''
+}
+
+carregar()
+</script>
+</body></html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">📊 Histórico de Disparos</div><div class="page-sub">Registro de todos os disparos realizados</div></div>
+    <button class="btn btn-ghost" onclick="limparHistorico()" style="align-self:center">🗑️ Limpar Histórico</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card"><div><div class="kpi-label">Total de Disparos</div><div class="kpi-val" id="kpiDisp">0</div></div><div class="kpi-icon ki-b">🚀</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Mensagens Enviadas</div><div class="kpi-val" id="kpiEnv" style="color:var(--green)">0</div></div><div class="kpi-icon ki-g">📤</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Erros</div><div class="kpi-val" id="kpiErr" style="color:var(--red)">0</div></div><div class="kpi-icon ki-r">❌</div></div>
+    <div class="kpi-card"><div><div class="kpi-label">Taxa de Sucesso</div><div class="kpi-val" id="kpiTaxa" style="color:var(--primary)">—</div></div><div class="kpi-icon ki-g">📈</div></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <div class="tbl-top"><span class="tbl-title">Histórico Completo</span></div>
+    <table>
+      <thead><tr><th>Campanha</th><th>Data</th><th>Hora</th><th style="text-align:center">Total</th><th style="text-align:center">Enviados</th><th style="text-align:center">Erros</th><th style="text-align:center">Pulados</th><th style="text-align:center">Taxa</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+
+async function carregar() {
+  const hist = await ipcRenderer.invoke('dados:ler','historico')||[]
+  const totEnv = hist.reduce((s,h)=>s+(h.enviados||0),0)
+  const totErr = hist.reduce((s,h)=>s+(h.erros||0),0)
+  const taxa   = totEnv+totErr>0 ? Math.round(totEnv/(totEnv+totErr)*100)+'%' : '—'
+  document.getElementById('kpiDisp').textContent = hist.length
+  document.getElementById('kpiEnv').textContent  = totEnv
+  document.getElementById('kpiErr').textContent  = totErr
+  document.getElementById('kpiTaxa').textContent = taxa
+
+  document.getElementById('tbody').innerHTML = hist.length ? hist.map(h=>{
+    const tot=h.total||0; const env=h.enviados||0; const err=h.erros||0
+    const t=tot>0?Math.round(env/tot*100):0
+    return `<tr>
+      <td><b style="color:var(--fg)">${h.nome||'Disparo'}</b></td>
+      <td style="font-size:12px;color:var(--muted)">${h.data||'—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${h.hora||'—'}</td>
+      <td style="text-align:center">${tot}</td>
+      <td style="text-align:center;color:var(--green);font-weight:700">${env}</td>
+      <td style="text-align:center;color:var(--red)">${err}</td>
+      <td style="text-align:center;color:var(--muted)">${h.pulados||0}</td>
+      <td style="text-align:center"><span class="badge ${t>=80?'b-g':t>=50?'b-y':'b-r'}">${t}%</span></td>
+    </tr>`}).join('') : '<tr><td colspan="8" class="empty">Nenhum disparo realizado ainda.</td></tr>'
+}
+
+async function limparHistorico() {
+  confirmar('Limpar todo o histórico?', async ok=>{
+    if(!ok) return
+    await ipcRenderer.invoke('dados:salvar','historico',[])
+    carregar()
+  })
+}
+carregar()
+</script>
+</body></html>

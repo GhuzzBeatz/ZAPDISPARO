@@ -1,0 +1,14 @@
+node_modules/
+dist_installer/
+_work/
+
+*.log
+npm-debug.log*
+
+.env
+.env.*
+
+data/update_state.json
+
+.DS_Store
+Thumbs.db

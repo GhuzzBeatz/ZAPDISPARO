@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">🚀 Novo Disparo</div><div class="page-sub">Siga os passos abaixo para enviar mensagens em massa</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <!-- COLUNA ESQUERDA -->
+  <div>
+    <!-- PASSO 1 -->
+    <div class="form-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center">1</div>
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">Adicionar Contatos</div><div style="font-size:11px;color:var(--muted)">De onde vem os números</div></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="aba active" id="aba-excel"  onclick="setAba('excel')">📊 Envio em Massa (Excel)</button>
+        <button class="aba"        id="aba-lista"  onclick="setAba('lista')">👥 Contatos Salvos</button>
+        <button class="aba"        id="aba-manual" onclick="setAba('manual')">✏️ Digitar Números</button>
+      </div>
+
+      <!-- ABA EXCEL -->
+      <div id="sec-excel">
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:8px">PASSO 1 — Baixe a planilha modelo</div>
+            <button class="btn btn-primary" onclick="baixarModelo()" style="width:100%;padding:11px;font-size:13px;font-weight:800">⬇️ Baixar Planilha Modelo (Excel)</button>
+          </div>
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:8px">PASSO 2 — Formato da planilha</div>
+            <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;font-family:monospace;font-size:11px;line-height:2;color:var(--fg)">
+              <span style="color:var(--primary);font-weight:700">telefone</span> <span style="color:var(--muted)">← OBRIGATÓRIO. Ex: 11999999999</span><br>
+              <span style="color:var(--yellow)">nome</span> <span style="color:var(--muted)">← opcional</span><br>
+              <span style="color:var(--yellow)">empresa</span> <span style="color:var(--muted)">← opcional</span>
+            </div>
+            <div style="font-size:11px;color:var(--orange);margin-top:8px">⚠️ Telefone sem traço ou espaço. Com DDD. Ex: 11999999999</div>
+          </div>
+          <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+            <div style="font-size:12px;font-weight:800;color:var(--primary);margin-bottom:8px">PASSO 3 — Importe a planilha preenchida</div>
+            <button class="btn btn-ghost" onclick="importarExcel()" style="width:100%;padding:11px;font-size:13px;font-weight:700;border-color:var(--primary);color:var(--primary)">📂 Importar Planilha Preenchida</button>
+            <div id="excelInfo" style="margin-top:10px;font-size:13px;font-weight:600;display:none;padding:10px;border-radius:8px"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA CONTATOS SALVOS -->
+      <div id="sec-lista" style="display:none">
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:var(--fg2);line-height:1.7">
+          💡 Contatos cadastrados em <b>Gerenciar → Contatos</b>.
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn btn-primary" onclick="selecionarTodosContatos()" style="flex:1;padding:10px;font-size:13px;font-weight:800">✅ Selecionar Todos</button>
+          <button class="btn btn-ghost"   onclick="limparSelecaoContatos()"   style="padding:10px;font-size:13px">✕ Limpar</button>
+        </div>
+        <input id="buscaContatos" placeholder="🔍 Filtrar por nome ou empresa..." oninput="filtrarContatos()"
+          style="width:100%;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--fg);font-size:13px;outline:none">
+        <div id="listaContatosCheck" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;background:var(--card2)"></div>
+        <div id="listaInfo" style="margin-top:10px;font-size:13px;font-weight:600;display:none;padding:10px;border-radius:8px"></div>
+      </div>
+
+      <!-- ABA MANUAL -->
+      <div id="sec-manual" style="display:none">
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;font-size:12px;color:var(--fg2);line-height:1.9">
+          Digite um número por linha com DDD:<br>
+          <span style="font-family:monospace;background:var(--bg2);padding:2px 6px;border-radius:4px;color:var(--primary)">11999999999</span> só o número<br>
+          <span style="font-family:monospace;background:var(--bg2);padding:2px 6px;border-radius:4px;color:var(--primary)">11999999999|João Silva</span> número|nome<br>
+          <span style="color:var(--orange);font-size:11px">⚠️ Mínimo 10 dígitos (DDD + número). Sem traços ou espaços.</span>
+        </div>
+        <textarea id="contatosManual" style="min-height:130px;font-family:monospace;font-size:13px" placeholder="11999999999&#10;21988887777|Maria Silva&#10;31977776666|João|Empresa"></textarea>
+        <div id="manualInfo" style="font-size:13px;font-weight:600;margin-top:8px;display:none;padding:10px;border-radius:8px"></div>
+        <button class="btn btn-primary" onclick="processarManual()" style="width:100%;margin-top:10px;padding:11px;font-size:13px;font-weight:800">✅ Confirmar Números</button>
+      </div>
+
+      <!-- RESUMO -->
+      <div id="resumoContatos" style="display:none;margin-top:14px;padding:12px 16px;background:var(--green-bg);border:1px solid rgba(37,211,102,.3);border-radius:10px;align-items:center;gap:10px">
+        <div style="font-size:22px">✅</div>
+        <div>
+          <div style="font-size:14px;font-weight:800;color:var(--green)" id="resumoTxt"></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Pronto para disparar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASSO 2: MENSAGEM -->
+    <div class="form-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center">2</div>
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">Escrever a Mensagem</div><div style="font-size:11px;color:var(--muted)">O que cada contato vai receber</div></div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Usar Template Salvo (opcional)</label>
+        <select id="templateSelect" onchange="carregarTemplate()"><option value="">— Escrever nova mensagem —</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Texto da Mensagem *</label>
+        <textarea id="mensagem" style="min-height:150px;font-size:14px;line-height:1.8" placeholder="Olá {nome}, tudo bem? 😊"></textarea>
+      </div>
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--fg2);margin-top:8px;line-height:1.9">
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Variáveis substituídas automaticamente:</div>
+        <span style="color:var(--primary);font-weight:700">{nome}</span> &nbsp;
+        <span style="color:var(--primary);font-weight:700">{empresa}</span> &nbsp;
+        <span style="color:var(--primary);font-weight:700">{produto}</span> &nbsp;
+        <span style="color:var(--primary);font-weight:700">{valor}</span>
+      </div>
+      <button class="btn btn-ghost" onclick="salvarTemplate()" style="margin-top:10px;font-size:12px;width:100%">💾 Salvar como template</button>
+    </div>
+
+    <!-- PASSO 3: IMAGEM -->
+    <div class="form-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--border2);color:var(--muted);font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center">3</div>
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">Imagem <span style="font-size:11px;color:var(--muted);font-weight:500">(opcional)</span></div></div>
+      </div>
+      <div id="imagemPreview" style="display:none;margin-bottom:12px">
+        <img id="imagemImg" style="max-height:100px;border-radius:8px;border:1px solid var(--border)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="imagemNomeEl"></div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <label style="cursor:pointer;background:var(--card2);border:1px solid var(--border);color:var(--fg2);padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;flex:1;justify-content:center">
+          🖼️ Selecionar Imagem (JPG/PNG)
+          <input type="file" id="imagemInput" accept="image/*" style="display:none" onchange="preview(this)">
+        </label>
+        <button class="btn-danger" id="btnRemImagem" onclick="removerImagem()" style="display:none;padding:9px 14px">🗑️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COLUNA DIREITA -->
+  <div>
+    <!-- PASSO 4: INTERVALO -->
+    <div class="form-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center">4</div>
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">Intervalo Entre Envios</div><div style="font-size:11px;color:var(--muted)">Essencial para não ser bloqueado</div></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group fg1"><label class="form-label">Mínimo (segundos)</label><input type="number" id="delayMin" value="10" min="3" max="60"></div>
+        <div class="form-group fg1"><label class="form-label">Máximo (segundos)</label><input type="number" id="delayMax" value="25" min="5" max="120"></div>
+      </div>
+      <div style="background:var(--yellow-bg);border:1px solid rgba(251,191,36,.25);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--fg2);margin-top:12px;line-height:1.7">
+        ⚠️ <b>Não diminua abaixo de 10 segundos.</b> O WhatsApp pode banir o número com envios muito rápidos.
+      </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="form-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">👁️ Prévia da Mensagem</div><div style="font-size:11px;color:var(--muted)">Como o 1º contato vai receber</div></div>
+        <button class="btn btn-ghost" onclick="atualizarPreview()" style="font-size:12px;padding:6px 12px">🔄</button>
+      </div>
+      <div id="preview" style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;color:var(--fg2);line-height:1.8;white-space:pre-wrap;min-height:80px">
+        Preencha a mensagem para ver a prévia aqui.
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px" id="prevInfo"></div>
+    </div>
+
+    <!-- PASSO 5: DISPARAR -->
+    <div class="form-card" style="background:linear-gradient(135deg,var(--primary-bg),var(--card));border-color:rgba(37,211,102,.3)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--primary);color:#000;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center">5</div>
+        <div><div style="font-size:13px;font-weight:800;color:var(--fg)">Disparar Mensagens</div><div style="font-size:11px;color:var(--muted)">Tudo pronto? Clique para iniciar</div></div>
+      </div>
+
+      <!-- BOTÃO INICIAR -->
+      <div id="areaDisparo">
+        <button class="btn btn-primary" onclick="iniciarDisparo()" style="width:100%;padding:15px;font-size:16px;font-weight:900">
+          🚀 Iniciar Disparo Agora
+        </button>
+        <div class="aviso av-ok"  id="avisoOk"  style="margin-top:10px"></div>
+        <div class="aviso av-erro" id="avisoErro" style="margin-top:10px"></div>
+      </div>
+
+      <!-- PAINEL DE CONTROLE -->
+      <div id="areaControle" style="display:none">
+        <!-- STATUS ATUAL -->
+        <div id="statusAtual" style="background:var(--card2);border:1px solid var(--primary);border-radius:10px;padding:11px 14px;margin-bottom:12px;font-size:13px;font-weight:700;color:var(--primary);text-align:center">
+          ⏳ Iniciando...
+        </div>
+
+        <!-- BARRA -->
+        <div style="margin-bottom:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <div style="font-size:12px;color:var(--muted)" id="ctrlTxt">Aguardando...</div>
+            <div style="font-size:14px;font-weight:900;color:var(--primary)" id="ctrlPct">0%</div>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="ctrlBar" style="width:0%"></div></div>
+        </div>
+
+        <!-- CONTADORES -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+          <div style="text-align:center;background:var(--green-bg);border:1px solid rgba(37,211,102,.2);border-radius:8px;padding:8px">
+            <div style="font-size:20px;font-weight:900;color:var(--green)" id="ctrlEnviados">0</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">Enviados</div>
+          </div>
+          <div style="text-align:center;background:var(--red-bg);border:1px solid rgba(240,82,82,.2);border-radius:8px;padding:8px">
+            <div style="font-size:20px;font-weight:900;color:var(--red)" id="ctrlErros">0</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">Erros</div>
+          </div>
+          <div style="text-align:center;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px">
+            <div style="font-size:20px;font-weight:900;color:var(--fg)" id="ctrlTotal">0</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:2px">Total</div>
+          </div>
+        </div>
+
+        <!-- ÚLTIMO ENVIO -->
+        <div id="ctrlUltimo" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--muted);min-height:36px">
+          Aguardando início...
+        </div>
+
+        <!-- AGUARDANDO DELAY -->
+        <div id="ctrlAguardando" style="display:none;text-align:center;font-size:12px;color:var(--yellow);margin-bottom:8px;background:var(--yellow-bg);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:8px">
+          ⏳ <span id="ctrlAguardandoTxt">Aguardando...</span>
+        </div>
+
+        <!-- LOG -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:12px">
+          <div style="padding:6px 12px;border-bottom:1px solid var(--border);font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">📋 Log de Atividade</div>
+          <div id="logBox" style="max-height:130px;overflow-y:auto;padding:6px 12px">
+            <div id="logItens" style="font-size:11px;line-height:1.9;font-family:monospace"></div>
+          </div>
+        </div>
+
+        <!-- BOTÕES -->
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-ghost" onclick="pausarRetomar()" id="btnPausar" style="flex:1;padding:11px">⏸️ Pausar</button>
+          <button class="btn" onclick="cancelar()" style="flex:1;padding:11px;background:var(--red);color:#fff;border:none">⏹️ Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<style>
+.aba{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.aba.active{border-color:var(--primary);background:var(--primary-bg);color:var(--fg)}
+.progress-bar-bg{background:var(--bg2);border-radius:99px;height:8px;overflow:hidden}
+.progress-bar-fill{height:100%;border-radius:99px;background:var(--primary);transition:width .4s ease}
+</style>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+
+let contatosAtivos = []
+let imagemBase64   = null
+let imagemNome     = null
+let imagemMime     = null
+let imagemPath     = null
+let pausado        = false
+
+// ── ABAS ──────────────────────────────────────────────────
+function setAba(aba) {
+  ;['excel','lista','manual'].forEach(a => {
+    document.getElementById('sec-'+a).style.display = a===aba ? 'block' : 'none'
+    document.getElementById('aba-'+a).classList.toggle('active', a===aba)
+  })
+  contatosAtivos = []
+  document.getElementById('resumoContatos').style.display = 'none'
+  if (aba === 'lista') carregarSelectListas()
+}
+
+// ── CONTATOS SALVOS ───────────────────────────────────────
+let todosContatos = []
+
+async function carregarSelectListas() {
+  todosContatos = await ipcRenderer.invoke('dados:ler', 'contatos') || []
+  renderListaContatos(todosContatos)
+}
+
+function renderListaContatos(lista) {
+  const el = document.getElementById('listaContatosCheck')
+  if (!lista.length) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Nenhum contato cadastrado ainda.<br>Vá em <b>Gerenciar → Contatos</b>.</div>'
+    return
+  }
+  el.innerHTML = lista.map((c, i) => `
+    <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px" onmouseover="this.style.background='var(--card)'" onmouseout="this.style.background=''">
+      <input type="checkbox" class="chk-contato" data-idx="${i}" style="width:15px;height:15px;cursor:pointer;margin:0" onchange="atualizarSelecionados()">
+      <div style="flex:1">
+        <div style="font-weight:700;color:var(--fg)">${c.nome||'Sem nome'}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:monospace">${c.telefone||''} ${c.empresa?'· '+c.empresa:''}</div>
+      </div>
+    </label>`).join('')
+}
+
+function filtrarContatos() {
+  const busca = (document.getElementById('buscaContatos')?.value||'').toLowerCase()
+  const lista = busca ? todosContatos.filter(c =>
+    (c.nome||'').toLowerCase().includes(busca) ||
+    (c.empresa||'').toLowerCase().includes(busca) ||
+    (c.telefone||'').includes(busca)) : todosContatos
+  renderListaContatos(lista)
+}
+
+function atualizarSelecionados() {
+  const checks = document.querySelectorAll('.chk-contato:checked')
+  contatosAtivos = Array.from(checks).map(cb => todosContatos[parseInt(cb.dataset.idx)]).filter(Boolean)
+  const el = document.getElementById('listaInfo')
+  if (contatosAtivos.length) {
+    el.style.cssText = 'display:block;background:var(--green-bg);border:1px solid rgba(37,211,102,.2);color:var(--green);padding:10px;border-radius:8px;font-size:13px;font-weight:600'
+    el.textContent = '✅ ' + contatosAtivos.length + ' contato(s) selecionado(s)'
+    mostrarResumo()
+  } else {
+    el.style.display = 'none'
+    document.getElementById('resumoContatos').style.display = 'none'
+  }
+}
+
+function selecionarTodosContatos() {
+  document.querySelectorAll('.chk-contato').forEach(cb => cb.checked = true)
+  atualizarSelecionados()
+}
+
+function limparSelecaoContatos() {
+  document.querySelectorAll('.chk-contato').forEach(cb => cb.checked = false)
+  contatosAtivos = []
+  document.getElementById('listaInfo').style.display = 'none'
+  document.getElementById('resumoContatos').style.display = 'none'
+}
+
+// ── EXCEL ─────────────────────────────────────────────────
+async function importarExcel() {
+  const r = await ipcRenderer.invoke('importar:arquivo')
+  if (!r.ok) { if (r.motivo !== 'cancelado') avisoModal('Erro ao importar: ' + r.motivo); return }
+
+  contatosAtivos = r.dados.filter(row => {
+    const tel = (row.telefone||row.numero||row.celular||'').toString().replace(/\D/g,'')
+    return tel.length >= 8
+  })
+
+  const invalidos = r.dados.length - contatosAtivos.length
+  const el = document.getElementById('excelInfo')
+  el.style.display = 'block'
+
+  if (!contatosAtivos.length) {
+    el.style.cssText = 'display:block;background:var(--red-bg);border:1px solid rgba(240,82,82,.2);color:var(--red);padding:10px;border-radius:8px;font-size:13px;font-weight:600'
+    el.textContent = '❌ Nenhum número válido. A coluna deve se chamar "telefone" (em minúsculo).'
+  } else {
+    el.style.cssText = 'display:block;background:var(--green-bg);border:1px solid rgba(37,211,102,.2);color:var(--green);padding:10px;border-radius:8px;font-size:13px;font-weight:600'
+    el.textContent = '✅ ' + r.arquivo + ' — ' + contatosAtivos.length + ' contato(s)' + (invalidos ? ' · ⚠️ ' + invalidos + ' linha(s) sem telefone válido ignorada(s)' : '')
+    mostrarResumo()
+  }
+  atualizarPreview()
+}
+
+async function baixarModelo() {
+  const r = await ipcRenderer.invoke('salvar:modelo')
+  if (r.ok) aviso('ok', '✅ Planilha modelo salva! Abra no Excel e preencha seus contatos.')
+  else if (r.motivo !== 'cancelado') aviso('erro', 'Erro ao salvar: ' + r.motivo)
+}
+
+// ── MANUAL ────────────────────────────────────────────────
+function processarManual() {
+  const linhas = document.getElementById('contatosManual').value.split('\n').map(l=>l.trim()).filter(Boolean)
+  contatosAtivos = []
+  let invalidos = 0
+  const errosMsgs = []
+
+  linhas.forEach((linha, i) => {
+    const partes  = linha.split('|')
+    const tel     = (partes[0]||'').replace(/\D/g,'')
+    const nome    = partes[1]?.trim() || ''
+    const empresa = partes[2]?.trim() || ''
+    if (!tel) return
+    if (tel.length < 10) { invalidos++; errosMsgs.push('Linha '+(i+1)+': "'+partes[0]+'" — muito curto (mínimo 10 dígitos com DDD)'); return }
+    if (tel.length > 13) { invalidos++; errosMsgs.push('Linha '+(i+1)+': "'+partes[0]+'" — muito longo (máximo 13 dígitos)'); return }
+    contatosAtivos.push({ telefone: tel, nome, empresa })
+  })
+
+  const el = document.getElementById('manualInfo')
+  el.style.display = 'block'
+
+  if (!contatosAtivos.length) {
+    el.style.cssText = 'display:block;background:var(--red-bg);border:1px solid rgba(240,82,82,.2);color:var(--red);padding:10px;border-radius:8px;font-size:13px;font-weight:600'
+    el.innerHTML = '❌ Nenhum número válido.' + (errosMsgs.length ? '<div style="font-size:11px;margin-top:6px;line-height:1.8">' + errosMsgs.slice(0,5).join('<br>') + (errosMsgs.length>5?'<br>... +' + (errosMsgs.length-5) + ' mais':'') + '</div>' : '')
+  } else {
+    el.style.cssText = 'display:block;background:var(--green-bg);border:1px solid rgba(37,211,102,.2);color:var(--green);padding:10px;border-radius:8px;font-size:13px;font-weight:600'
+    el.innerHTML = '✅ ' + contatosAtivos.length + ' número(s) confirmado(s)' + (invalidos ? '<div style="font-size:11px;color:var(--orange);margin-top:4px">⚠️ ' + invalidos + ' linha(s) com erro ignorada(s):<br>' + errosMsgs.slice(0,3).join('<br>') + '</div>' : '')
+    mostrarResumo()
+  }
+}
+
+function mostrarResumo() {
+  if (!contatosAtivos.length) return
+  const el = document.getElementById('resumoContatos')
+  el.style.display = 'flex'
+  document.getElementById('resumoTxt').textContent = contatosAtivos.length + ' contato(s) prontos para receber a mensagem'
+  atualizarPreview()
+}
+
+// ── TEMPLATES ─────────────────────────────────────────────
+async function carregarSelectTemplates() {
+  const tmpls = await ipcRenderer.invoke('templates:ler') || []
+  const sel   = document.getElementById('templateSelect')
+  sel.innerHTML = '<option value="">— Escrever nova mensagem —</option>'
+  tmpls.forEach((t,i) => sel.innerHTML += '<option value="'+i+'">'+t.nome+'</option>')
+}
+
+function carregarTemplate() {
+  const idx = document.getElementById('templateSelect').value
+  if (idx==='') return
+  ipcRenderer.invoke('templates:ler').then(tmpls => {
+    const t = tmpls[Number(idx)]
+    if (t) { document.getElementById('mensagem').value = t.mensagem; atualizarPreview() }
+  })
+}
+
+async function salvarTemplate() {
+  const msg = document.getElementById('mensagem').value.trim()
+  if (!msg) { avisoModal('Escreva uma mensagem antes de salvar.'); return }
+  const nome = prompt('Nome para salvar o template:')
+  if (!nome) return
+  const tmpls = await ipcRenderer.invoke('templates:ler') || []
+  tmpls.push({ nome, mensagem: msg })
+  await ipcRenderer.invoke('templates:salvar', tmpls)
+  aviso('ok', 'Template "'+nome+'" salvo!')
+  carregarSelectTemplates()
+}
+
+// ── IMAGEM ────────────────────────────────────────────────
+function preview(input) {
+  const file = input.files[0]; if (!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    imagemBase64 = e.target.result.split(',')[1]
+    imagemNome   = file.name
+    imagemMime   = file.type || null
+    imagemPath   = file.path || null
+    document.getElementById('imagemImg').src             = e.target.result
+    document.getElementById('imagemNomeEl').textContent  = file.name
+    document.getElementById('imagemPreview').style.display = 'block'
+    document.getElementById('btnRemImagem').style.display  = 'inline-flex'
+  }
+  reader.readAsDataURL(file)
+}
+function removerImagem() {
+  imagemBase64 = null; imagemNome = null; imagemMime = null; imagemPath = null
+  document.getElementById('imagemPreview').style.display = 'none'
+  document.getElementById('btnRemImagem').style.display  = 'none'
+  document.getElementById('imagemInput').value           = ''
+}
+
+// ── PREVIEW ───────────────────────────────────────────────
+function atualizarPreview() {
+  const msg  = document.getElementById('mensagem').value
+  const demo = contatosAtivos[0] || { nome:'João Silva', telefone:'11999999999', empresa:'Empresa Exemplo', produto:'Produto X', valor:'R$ 99,90' }
+  const prev = msg
+    .replace(/\{nome\}/gi,    demo.nome||'')
+    .replace(/\{telefone\}/gi,demo.telefone||'')
+    .replace(/\{empresa\}/gi, demo.empresa||'')
+    .replace(/\{produto\}/gi, demo.produto||'')
+    .replace(/\{valor\}/gi,   demo.valor||'')
+    .replace(/\{campo1\}/gi,  demo.campo1||'')
+    .replace(/\{campo2\}/gi,  demo.campo2||'')
+  document.getElementById('preview').textContent  = prev || 'Preencha a mensagem para ver a prévia aqui.'
+  document.getElementById('prevInfo').textContent = contatosAtivos.length ? 'Prévia com dados de: '+(contatosAtivos[0]?.nome||contatosAtivos[0]?.telefone||'1º contato') : 'Prévia com dados de exemplo'
+}
+document.getElementById('mensagem').addEventListener('input', atualizarPreview)
+
+// ── LOG ───────────────────────────────────────────────────
+function addLog(msg, cor) {
+  const el = document.getElementById('logItens'); if (!el) return
+  const div = document.createElement('div')
+  div.style.color = cor || 'var(--fg2)'
+  div.textContent = msg
+  el.appendChild(div)
+  const box = document.getElementById('logBox'); if (box) box.scrollTop = box.scrollHeight
+}
+
+function setStatus(msg, cor) {
+  const el = document.getElementById('statusAtual'); if (!el) return
+  el.textContent   = msg
+  el.style.color   = cor || 'var(--primary)'
+  el.style.borderColor = cor || 'var(--primary)'
+}
+
+// ── DISPARO ───────────────────────────────────────────────
+async function iniciarDisparo() {
+  // 1. Verificar WhatsApp conectado
+  let statusWpp
+  try { statusWpp = await ipcRenderer.invoke('wpp:status') } catch(e) {}
+  if (!statusWpp || statusWpp.status !== 'conectado') {
+    avisoModal('⚠️ WhatsApp não está conectado!\n\nVá em "Conexão WhatsApp" no menu e conecte antes de disparar.')
+    return
+  }
+
+  // 2. Verificar contatos
+  if (!contatosAtivos.length) {
+    avisoModal('⚠️ Nenhum contato adicionado!\n\nSelecione contatos no Passo 1:\n• Importe uma planilha Excel\n• Selecione contatos salvos\n• Digite números manualmente')
+    return
+  }
+
+  // 3. Verificar mensagem
+  const msg = document.getElementById('mensagem').value.trim()
+  if (!msg) {
+    avisoModal('⚠️ Mensagem vazia!\n\nEscreva a mensagem no Passo 2 antes de disparar.')
+    return
+  }
+
+  // 4. Verificar delays
+  const delayMin = Number(document.getElementById('delayMin').value || 10)
+  const delayMax = Number(document.getElementById('delayMax').value || 25)
+  if (delayMin < 3) {
+    avisoModal('⚠️ Intervalo mínimo muito baixo!\n\nNão use menos de 10 segundos para não ser banido pelo WhatsApp.')
+    return
+  }
+  if (delayMax < delayMin) {
+    avisoModal('⚠️ O intervalo máximo deve ser maior ou igual ao mínimo.')
+    return
+  }
+
+  // Tudo OK — iniciar
+  document.getElementById('logItens').innerHTML = ''
+  addLog('🚀 Iniciando disparo para ' + contatosAtivos.length + ' contato(s)...')
+  setStatus('⏳ Iniciando...', 'var(--primary)')
+  pausado = false
+
+  try {
+    await ipcRenderer.invoke('disparo:iniciar', {
+      contatos: contatosAtivos, mensagem: msg,
+      delayMin, delayMax, imagemBase64, imagemNome, imagemMime, imagemPath
+    })
+  } catch(e) {
+    setStatus('❌ Erro ao iniciar: ' + e.message, 'var(--red)')
+    addLog('❌ Erro: ' + e.message, 'var(--red)')
+  }
+}
+
+async function pausarRetomar() {
+  if (!pausado) {
+    await ipcRenderer.invoke('disparo:pausar')
+    document.getElementById('btnPausar').textContent = '▶️ Retomar'
+    setStatus('⏸️ Pausado — clique em Retomar para continuar', 'var(--yellow)')
+    addLog('⏸️ Disparo pausado', 'var(--yellow)')
+    pausado = true
+  } else {
+    await ipcRenderer.invoke('disparo:retomar')
+    document.getElementById('btnPausar').textContent = '⏸️ Pausar'
+    setStatus('🚀 Retomando...', 'var(--primary)')
+    addLog('▶️ Disparo retomado')
+    pausado = false
+  }
+}
+
+async function cancelar() {
+  confirmar('Cancelar o disparo em andamento?', async ok => {
+    if (!ok) return
+    await ipcRenderer.invoke('disparo:parar')
+    addLog('⏹️ Disparo cancelado pelo usuário', 'var(--orange)')
+    setStatus('⏹️ Cancelado', 'var(--orange)')
+    setTimeout(() => {
+      document.getElementById('areaDisparo').style.display  = 'block'
+      document.getElementById('areaControle').style.display = 'none'
+      pausado = false
+    }, 2000)
+  })
+}
+
+// ── ÚNICO window.addEventListener ─────────────────────────
+// ── RASTREAMENTO DO RELATÓRIO ──────────────────────────
+let relatorioEnviados = []
+let relatorioErros    = []
+let relatorioPulados  = []
+
+window.addEventListener('message', e => {
+  const { tipo, dados } = e.data || {}
+
+  if (tipo === 'zd:wstatus') {
+    if ((dados.status === 'desconectado') && document.getElementById('areaControle').style.display !== 'none') {
+      setStatus('❌ WhatsApp desconectado!', 'var(--red)')
+      addLog('❌ WhatsApp desconectado durante o disparo!', 'var(--red)')
+    }
+  }
+
+  if (tipo === 'zd:disparo_inicio') {
+    // Zerar relatório a cada novo disparo
+    relatorioEnviados = []
+    relatorioErros    = []
+    relatorioPulados  = []
+    document.getElementById('areaDisparo').style.display  = 'none'
+    document.getElementById('areaControle').style.display = 'block'
+    document.getElementById('ctrlTotal').textContent    = dados.total || 0
+    document.getElementById('ctrlEnviados').textContent = '0'
+    document.getElementById('ctrlErros').textContent    = '0'
+    document.getElementById('ctrlBar').style.width      = '0%'
+    document.getElementById('ctrlPct').textContent      = '0%'
+    document.getElementById('ctrlTxt').textContent      = 'Preparando...'
+    document.getElementById('ctrlUltimo').textContent   = 'Aguardando primeiro envio...'
+    document.getElementById('ctrlAguardando').style.display = 'none'
+    setStatus('🚀 Disparo iniciado! Total: ' + dados.total + ' mensagens', 'var(--primary)')
+    addLog('✅ Confirmado pelo servidor. Iniciando envios...', 'var(--green)')
+  }
+
+  if (tipo === 'zd:disparo_progresso') {
+    const { i: idx, total, enviados, erros, status, contato } = dados
+    const pct    = Math.round((idx / total) * 100)
+    const numero = dados.numero || contato || ''
+    const nome   = contato || numero
+    const motivo = String(dados.motivo || '').trim()
+
+    // Rastrear para o relatório
+    const entrada = { numero, nome, horario: new Date().toLocaleTimeString('pt-BR') }
+    if      (status === 'enviado') relatorioEnviados.push(entrada)
+    else if (status === 'erro')    relatorioErros.push({ ...entrada, motivo: dados.motivo || 'Falha no envio' })
+    else                           relatorioPulados.push(entrada)
+
+    document.getElementById('ctrlBar').style.width      = pct + '%'
+    document.getElementById('ctrlPct').textContent      = pct + '%'
+    document.getElementById('ctrlTxt').textContent      = 'Enviando ' + idx + ' de ' + total
+    document.getElementById('ctrlEnviados').textContent = enviados || 0
+    document.getElementById('ctrlErros').textContent    = erros || 0
+    document.getElementById('ctrlAguardando').style.display = 'none'
+    const icone = status === 'enviado' ? '✅' : status === 'erro' ? '❌' : '⏭️'
+    const cor   = status === 'enviado' ? 'var(--green)' : status === 'erro' ? 'var(--red)' : 'var(--muted)'
+    const label = status === 'enviado' ? 'Enviado' : status === 'erro' ? 'Erro' : 'Pulado'
+    const labelCompleto = status === 'erro' && motivo ? (label + ' - ' + motivo) : label
+    document.getElementById('ctrlUltimo').innerHTML = icone + ' <b>' + nome + '</b> — <span style="color:' + cor + '">' + labelCompleto + '</span>'
+    setStatus('⏳ Enviando ' + idx + '/' + total + ' — ' + pct + '%')
+    addLog(icone + ' ' + String(idx).padStart(String(total).length,'0') + '/' + total + ' · ' + nome + ' → ' + labelCompleto, cor)
+    if (idx >= total) document.getElementById('ctrlBar').style.background = 'var(--green)'
+  }
+
+  if (tipo === 'zd:aguardando') {
+    document.getElementById('ctrlAguardando').style.display = 'block'
+    document.getElementById('ctrlAguardandoTxt').textContent =
+      'Aguardando ' + dados.delay + 's antes do próximo (' + dados.proximo + '/' + document.getElementById('ctrlTotal').textContent + ')...'
+  }
+
+  if (tipo === 'zd:disparo_fim') {
+    document.getElementById('ctrlBar').style.width   = '100%'
+    document.getElementById('ctrlPct').textContent   = '100%'
+    document.getElementById('ctrlAguardando').style.display = 'none'
+    document.getElementById('ctrlEnviados').textContent = dados.enviados || 0
+    document.getElementById('ctrlErros').textContent    = dados.erros || 0
+    document.getElementById('ctrlUltimo').innerHTML = '<b style="color:var(--green)">✅ Concluído!</b> ' + dados.enviados + ' enviados · ' + dados.erros + ' erros · ' + (dados.pulados||0) + ' pulados'
+    setStatus('✅ Finalizado! ' + dados.enviados + ' enviados, ' + dados.erros + ' erros', 'var(--green)')
+    addLog('🎉 Disparo concluído! Enviados: ' + dados.enviados + ' · Erros: ' + dados.erros + ' · Pulados: ' + (dados.pulados||0), 'var(--green)')
+
+    // Mostrar relatório após 1.5s
+    setTimeout(() => mostrarRelatorio(), 1500)
+
+    setTimeout(() => {
+      document.getElementById('areaDisparo').style.display  = 'block'
+      document.getElementById('areaControle').style.display = 'none'
+      document.getElementById('ctrlBar').style.background   = 'var(--primary)'
+      document.getElementById('ctrlBar').style.width        = '0%'
+      document.getElementById('ctrlEnviados').textContent   = '0'
+      document.getElementById('ctrlErros').textContent      = '0'
+    }, 10000)
+  }
+
+  if (tipo === 'zd:disparo_erro') {
+    setStatus('❌ Erro: ' + dados.erro, 'var(--red)')
+    addLog('❌ Erro no disparo: ' + dados.erro, 'var(--red)')
+    setTimeout(() => {
+      document.getElementById('areaDisparo').style.display  = 'block'
+      document.getElementById('areaControle').style.display = 'none'
+    }, 3000)
+  }
+})
+
+// ── RELATÓRIO FINAL ────────────────────────────────────
+function mostrarRelatorio() {
+  const total = relatorioEnviados.length + relatorioErros.length + relatorioPulados.length
+  const horario = new Date().toLocaleString('pt-BR')
+
+  // Montar linhas enviados
+  const linhasEnviados = relatorioEnviados.map((r, i) =>
+    `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 12px;color:var(--muted);font-size:11px">${String(i+1).padStart(3,'0')}</td>
+      <td style="padding:7px 12px;font-family:monospace;font-size:12px">${r.numero}</td>
+      <td style="padding:7px 12px;font-size:12px;color:var(--fg)">${r.nome !== r.numero ? r.nome : '—'}</td>
+      <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${r.horario}</td>
+      <td style="padding:7px 12px"><span style="background:var(--green-bg);color:var(--green);border-radius:99px;padding:2px 9px;font-size:10px;font-weight:700">✅ Enviado</span></td>
+    </tr>`).join('')
+
+  // Montar linhas erros
+  const linhasErros = relatorioErros.map((r, i) =>
+    `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 12px;color:var(--muted);font-size:11px">${String(i+1).padStart(3,'0')}</td>
+      <td style="padding:7px 12px;font-family:monospace;font-size:12px">${r.numero}</td>
+      <td style="padding:7px 12px;font-size:12px;color:var(--fg)">${r.nome !== r.numero ? r.nome : '—'}</td>
+      <td style="padding:7px 12px;font-size:11px;color:var(--muted)">${r.horario}</td>
+      <td style="padding:7px 12px"><span style="background:var(--red-bg);color:var(--red);border-radius:99px;padding:2px 9px;font-size:10px;font-weight:700">❌ Erro</span></td>
+    </tr>`).join('')
+
+  // Texto para copiar
+  const textoEnviados = relatorioEnviados.map(r => '✅ ' + r.numero + (r.nome !== r.numero ? ' — ' + r.nome : '')).join('\n')
+  const textoErros    = relatorioErros.map(r =>    '❌ ' + r.numero + (r.nome !== r.numero ? ' — ' + r.nome : '')).join('\n')
+  const textoCompleto = [
+    '📊 RELATÓRIO DE DISPARO — ' + horario,
+    '━'.repeat(40),
+    'Total: ' + total + ' | ✅ Enviados: ' + relatorioEnviados.length + ' | ❌ Erros: ' + relatorioErros.length + (relatorioPulados.length ? ' | ⏭️ Pulados: ' + relatorioPulados.length : ''),
+    '',
+    '✅ ENVIADOS COM SUCESSO (' + relatorioEnviados.length + ')',
+    textoEnviados || '(nenhum)',
+    '',
+    '❌ COM ERRO (' + relatorioErros.length + ')',
+    textoErros || '(nenhum)',
+  ].join('\n')
+
+  const modal = document.getElementById('modalRelatorio')
+  document.getElementById('relResumo').innerHTML =
+    '<span style="background:rgba(37,211,102,.15);color:var(--green);border-radius:99px;padding:4px 14px;font-size:13px;font-weight:800">✅ ' + relatorioEnviados.length + ' enviados</span>' +
+    '&nbsp;&nbsp;<span style="background:rgba(240,82,82,.15);color:var(--red);border-radius:99px;padding:4px 14px;font-size:13px;font-weight:800">❌ ' + relatorioErros.length + ' erros</span>' +
+    (relatorioPulados.length ? '&nbsp;&nbsp;<span style="background:var(--card2);color:var(--muted);border-radius:99px;padding:4px 14px;font-size:13px;font-weight:800">⏭️ ' + relatorioPulados.length + ' pulados</span>' : '') +
+    '<br><span style="font-size:11px;color:var(--muted);margin-top:6px;display:block">Concluído em ' + horario + '</span>'
+
+  document.getElementById('relTabelaEnviados').innerHTML = linhasEnviados ||
+    '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Nenhum envio realizado</td></tr>'
+  document.getElementById('relTabelaErros').innerHTML = linhasErros ||
+    '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Nenhum erro — tudo enviado com sucesso! 🎉</td></tr>'
+
+  document.getElementById('relatorioCompleto').value = textoCompleto
+  modal.style.display = 'flex'
+}
+
+function fecharRelatorio() {
+  document.getElementById('modalRelatorio').style.display = 'none'
+}
+
+function copiarRelatorio() {
+  const txt = document.getElementById('relatorioCompleto').value
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = document.getElementById('btnCopiarRel')
+    btn.textContent = '✅ Copiado!'
+    btn.style.background = 'var(--green)'
+    btn.style.color = '#000'
+    setTimeout(() => { btn.textContent = '📋 Copiar Relatório Completo'; btn.style.background = ''; btn.style.color = '' }, 2000)
+  })
+}
+
+carregarSelectListas()
+carregarSelectTemplates()
+</script>
+
+<!-- MODAL RELATÓRIO -->
+<div id="modalRelatorio" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="background:var(--card);border:1px solid var(--border2);border-radius:18px;width:760px;max-width:97vw;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,.6)">
+
+    <!-- Header -->
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-size:16px;font-weight:900;color:var(--fg)">📊 Relatório do Disparo</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Resumo completo dos envios realizados</div>
+      </div>
+      <button onclick="fecharRelatorio()" style="background:var(--card2);border:1px solid var(--border);color:var(--fg2);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>
+
+    <!-- Resumo -->
+    <div style="padding:16px 22px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <div id="relResumo" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"></div>
+    </div>
+
+    <!-- Abas -->
+    <div style="padding:12px 22px 0;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-shrink:0">
+      <button id="abaEnviadosBtn" class="aba active" onclick="trocarAbaRel('enviados')">✅ Enviados com sucesso</button>
+      <button id="abaErrosBtn"    class="aba"        onclick="trocarAbaRel('erros')">❌ Com erro</button>
+      <button id="abaTextoBtn"    class="aba"        onclick="trocarAbaRel('texto')">📋 Texto completo</button>
+    </div>
+
+    <!-- Conteúdo -->
+    <div style="flex:1;overflow-y:auto">
+
+      <!-- Tabela enviados -->
+      <div id="abaEnviados">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">#</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Número</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Nome</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Horário</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Status</th>
+          </tr></thead>
+          <tbody id="relTabelaEnviados"></tbody>
+        </table>
+      </div>
+
+      <!-- Tabela erros -->
+      <div id="abaErros" style="display:none">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--bg2)">
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">#</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Número</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Nome</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Horário</th>
+            <th style="padding:9px 12px;text-align:left;font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase">Status</th>
+          </tr></thead>
+          <tbody id="relTabelaErros"></tbody>
+        </table>
+      </div>
+
+      <!-- Texto completo -->
+      <div id="abaTexto" style="display:none;padding:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Texto formatado para copiar e guardar ou enviar por e-mail:</div>
+        <textarea id="relatorioCompleto" readonly style="width:100%;height:280px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--fg2);font-family:monospace;font-size:11px;line-height:1.8;resize:none"></textarea>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0">
+      <button id="btnCopiarRel" onclick="copiarRelatorio()" style="padding:10px 20px;background:var(--primary-bg);color:var(--primary);border:1px solid var(--primary-bdr);border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;display:flex;align-items:center;gap:6px">
+        📋 Copiar Relatório Completo
+      </button>
+      <button onclick="fecharRelatorio()" style="padding:10px 20px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">
+        Fechar
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+function trocarAbaRel(aba) {
+  ;['enviados','erros','texto'].forEach(a => {
+    document.getElementById('aba'+a.charAt(0).toUpperCase()+a.slice(1)).style.display = a===aba?'block':'none'
+    document.getElementById('aba'+a.charAt(0).toUpperCase()+a.slice(1)+'Btn').classList.toggle('active', a===aba)
+  })
+}
+</script>
+</body></html>

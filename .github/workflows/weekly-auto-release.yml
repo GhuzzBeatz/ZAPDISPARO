@@ -1,0 +1,135 @@
+﻿name: Weekly Auto Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Toda segunda-feira as 12:00 UTC (~09:00 BRT)
+    - cron: '0 12 * * 1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: weekly-auto-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Upgrade WhatsApp engine dependency
+        run: npm install whatsapp-web.js@latest
+
+      - name: Bump app version (patch)
+        run: npm run ci:bump-version
+
+      - name: Build installer
+        run: npm run build
+
+      - name: Resolve build artifacts
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $version = [string]$pkg.version
+
+          $setup = Get-ChildItem dist_installer -File |
+            Where-Object { $_.Name -like '*.exe' -and $_.Name -notlike '*.blockmap' } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          if (-not $setup) {
+            throw 'Setup (.exe) nao encontrado em dist_installer.'
+          }
+
+          $blockmap = Get-ChildItem dist_installer -File |
+            Where-Object { $_.Name -like '*.blockmap' } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+
+          "APP_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SETUP_NAME=$($setup.Name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SETUP_PATH=$($setup.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          if ($blockmap) {
+            "BLOCKMAP_NAME=$($blockmap.Name)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            "BLOCKMAP_PATH=$($blockmap.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Commit dependency and version update
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json package-lock.json
+
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "chore(release): v$env:APP_VERSION atualiza dependencias [skip ci]"
+            git push
+          } else {
+            Write-Host "Sem mudancas em package.json/package-lock.json"
+          }
+
+          $sha = (git rev-parse HEAD).Trim()
+          "RELEASE_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create or update GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v$env:APP_VERSION"
+          $notes = @"
+Atualizacao automatica semanal.
+
+- Versao: $env:APP_VERSION
+- WhatsApp engine: atualizado no pacote da release
+- Chromium: atualizado junto com o pacote do app
+"@
+
+          if (gh release view $tag *> $null) {
+            gh release upload $tag "$env:SETUP_PATH" --clobber
+            if ($env:BLOCKMAP_PATH) {
+              gh release upload $tag "$env:BLOCKMAP_PATH" --clobber
+            }
+            gh release edit $tag --title "ZapDisparo $env:APP_VERSION" --notes $notes
+          } else {
+            gh release create $tag "$env:SETUP_PATH" --target "$env:RELEASE_SHA" --title "ZapDisparo $env:APP_VERSION" --notes $notes
+            if ($env:BLOCKMAP_PATH) {
+              gh release upload $tag "$env:BLOCKMAP_PATH"
+            }
+          }
+
+      - name: Update update-manifest.json
+        run: |
+          node scripts/write-update-manifest.js --version "$env:APP_VERSION" --asset "$env:SETUP_NAME" --repo "$env:GITHUB_REPOSITORY" --out "update-manifest.json" --notes "Atualizacao automatica semanal."
+
+      - name: Commit and push updated manifest
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add update-manifest.json
+
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "chore(update): manifesto v$env:APP_VERSION [skip ci]"
+            git push
+          } else {
+            Write-Host "Manifesto sem mudancas"
+          }

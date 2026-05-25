@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">📝 Modelos de Mensagem</div><div class="page-sub">Salve mensagens prontas para reutilizar</div></div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title" id="formTitulo">Novo Modelo</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label">Nome do Modelo *</label>
+      <input id="nome" placeholder="Ex: Promoção de Julho, Boas-vindas, Follow-up...">
+    </div>
+    <div style="background:var(--pbg);border:1px solid var(--pbdr);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--fg2);margin-bottom:10px;line-height:1.8">
+      📌 Variáveis: <b>{nome}</b> <b>{empresa}</b> <b>{produto}</b> <b>{valor}</b> <b>{cidade}</b> <b>{campo1}</b> <b>{campo2}</b>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mensagem *</label>
+      <textarea id="mensagem" style="min-height:150px;font-size:14px;line-height:1.8" placeholder="Olá, {nome}! 👋&#10;&#10;Escreva sua mensagem aqui..."></textarea>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" id="btnSalvar" onclick="salvar()">+ Salvar Modelo</button>
+      <button class="btn-cancel" id="btnCancelar" onclick="cancelar()">Cancelar</button>
+    </div>
+    <div class="aviso av-ok"  id="avisoOk"></div>
+    <div class="aviso av-erro" id="avisoErro"></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <div class="tbl-top"><span class="tbl-title">Modelos Salvos</span><span class="tbl-count" id="count"></span></div>
+    <div id="listaModelos"></div>
+  </div>
+</div>
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let modelos = [], editandoIdx = null
+
+async function carregar() { modelos = await ipcRenderer.invoke('dados:ler','modelos')||[]; render() }
+
+async function salvar() {
+  const nome = document.getElementById('nome').value.trim()
+  const msg  = document.getElementById('mensagem').value.trim()
+  if (!nome) return aviso('erro','Informe o nome.')
+  if (!msg)  return aviso('erro','Escreva a mensagem.')
+  if (editandoIdx!==null) { modelos[editandoIdx]={nome,mensagem:msg}; aviso('ok','Modelo atualizado!'); cancelar() }
+  else { modelos.unshift({nome,mensagem:msg}); aviso('ok','Modelo salvo!'); limpar() }
+  await ipcRenderer.invoke('dados:salvar','modelos',modelos); render()
+}
+function editar(idx) {
+  const m=modelos[idx]
+  document.getElementById('nome').value     = m.nome
+  document.getElementById('mensagem').value = m.mensagem
+  document.getElementById('formTitulo').textContent    = '✏️ Editar Modelo'
+  document.getElementById('btnSalvar').textContent     = '💾 Salvar'
+  document.getElementById('btnCancelar').style.display = 'inline-flex'
+  editandoIdx=idx; window.scrollTo({top:0,behavior:'smooth'})
+}
+function cancelar() { limpar(); editandoIdx=null; document.getElementById('formTitulo').textContent='Novo Modelo'; document.getElementById('btnSalvar').textContent='+ Salvar Modelo'; document.getElementById('btnCancelar').style.display='none' }
+function limpar()   { document.getElementById('nome').value=''; document.getElementById('mensagem').value='' }
+async function excluir(idx) { confirmar('Excluir este modelo?', async ok=>{ if(!ok) return; modelos.splice(idx,1); await ipcRenderer.invoke('dados:salvar','modelos',modelos); render() }) }
+function usarNoDisparo(idx) { parent.ir('pages/disparo.html',null) }
+
+function render() {
+  document.getElementById('count').textContent = modelos.length+' modelo(s)'
+  const el = document.getElementById('listaModelos')
+  el.innerHTML = modelos.length ? modelos.map((m,i)=>`
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="flex:1">
+          <div style="font-weight:700;color:var(--fg);margin-bottom:6px">📝 ${m.nome}</div>
+          <div style="font-size:12px;color:var(--fg2);background:var(--card2);border-radius:8px;padding:10px;white-space:pre-wrap;line-height:1.7;max-height:80px;overflow:hidden">${m.mensagem}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn-edit" onclick="editar(${i})" title="Editar">✏️</button>
+          <button class="btn-danger" onclick="excluir(${i})" title="Excluir">🗑️</button>
+        </div>
+      </div>
+    </div>`).join('') : '<div class="empty">Nenhum modelo salvo. Crie um acima ou salve direto na tela de Disparo.</div>'
+}
+carregar()
+</script>
+</body></html>

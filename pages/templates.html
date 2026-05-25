@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">📝 Templates de Mensagem</div><div class="page-sub">Salve mensagens prontas para reutilizar nos disparos</div></div>
+    <button class="btn btn-primary" onclick="novo()" style="align-self:center">+ Novo Template</button>
+  </div>
+
+  <div style="background:var(--primary-bg);border:1px solid var(--primary-bdr);border-radius:10px;padding:12px 16px;font-size:13px;color:var(--fg2);margin-bottom:16px;line-height:1.7">
+    💡 Use variáveis como <b>{nome}</b>, <b>{produto}</b>, <b>{valor}</b>, <b>{empresa}</b>, <b>{campo1}</b> e <b>{campo2}</b> para personalizar cada mensagem automaticamente.
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title" id="formTitulo">Novo Template</div>
+    <div class="form-row">
+      <div class="form-group fg3"><label class="form-label">Nome do Template *</label><input id="nome" placeholder="Ex: Oferta Especial, Boas-Vindas, Follow-up..."></div>
+    </div>
+    <div class="form-group" style="margin-top:10px">
+      <label class="form-label">Mensagem *</label>
+      <textarea id="mensagem" style="min-height:150px;font-size:14px;line-height:1.8" placeholder="Olá {nome}! 👋&#10;&#10;Temos uma oferta especial para você...&#10;&#10;{produto} por apenas {valor}&#10;&#10;Entre em contato: (11) 99999-9999"></textarea>
+    </div>
+    <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);margin-top:8px">
+      Variáveis: <span style="color:var(--primary)">{nome} {telefone} {empresa} {produto} {valor} {campo1} {campo2}</span>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" id="btnSalvar" onclick="salvar()">+ Salvar Template</button>
+      <button class="btn-cancel" id="btnCancelar" onclick="cancelar()">Cancelar</button>
+    </div>
+    <div class="aviso av-ok"  id="avisoOk"></div>
+    <div class="aviso av-erro" id="avisoErro"></div>
+  </div>
+
+  <div id="listaTemplates"></div>
+</div>
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let editandoIdx = null
+
+async function carregar() {
+  const tmpls = await ipcRenderer.invoke('templates:ler') || []
+  const el    = document.getElementById('listaTemplates')
+  el.innerHTML = tmpls.length ? tmpls.map((t,i)=>`
+    <div class="sec-card" style="margin-bottom:10px">
+      <div class="sec-head">
+        📝 ${t.nome}
+        <div style="display:flex;gap:8px">
+          <button class="btn-edit" onclick="editar(${i})">✏️</button>
+          <button class="btn-danger" onclick="excluir(${i})">🗑️</button>
+        </div>
+      </div>
+      <div style="padding:14px 18px;font-size:13px;color:var(--fg2);white-space:pre-wrap;line-height:1.8">${t.mensagem}</div>
+    </div>`).join('')
+  : `<div class="sec-card"><div style="padding:32px;text-align:center;color:var(--muted)">Nenhum template salvo. Crie um acima.</div></div>`
+}
+
+async function salvar() {
+  const nome = document.getElementById('nome').value.trim()
+  const msg  = document.getElementById('mensagem').value.trim()
+  if (!nome) return aviso('erro','Informe o nome.')
+  if (!msg)  return aviso('erro','Escreva a mensagem.')
+  const tmpls = await ipcRenderer.invoke('templates:ler') || []
+  if (editandoIdx !== null) tmpls[editandoIdx] = { nome, mensagem: msg }
+  else tmpls.push({ nome, mensagem: msg })
+  await ipcRenderer.invoke('templates:salvar', tmpls)
+  aviso('ok', editandoIdx !== null ? 'Template atualizado!' : 'Template salvo!')
+  cancelar(); carregar()
+}
+
+function editar(i) {
+  ipcRenderer.invoke('templates:ler').then(tmpls => {
+    const t = tmpls[i]
+    document.getElementById('nome').value     = t.nome
+    document.getElementById('mensagem').value = t.mensagem
+    document.getElementById('formTitulo').textContent    = '✏️ Editar Template'
+    document.getElementById('btnSalvar').textContent     = '💾 Salvar'
+    document.getElementById('btnCancelar').style.display = 'inline-flex'
+    editandoIdx = i; window.scrollTo({top:0,behavior:'smooth'})
+  })
+}
+
+function cancelar() { document.getElementById('nome').value=''; document.getElementById('mensagem').value=''; editandoIdx=null; document.getElementById('formTitulo').textContent='Novo Template'; document.getElementById('btnSalvar').textContent='+ Salvar Template'; document.getElementById('btnCancelar').style.display='none' }
+
+function excluir(i) {
+  confirmar('Excluir este template?', async ok=>{
+    if (!ok) return
+    const tmpls = await ipcRenderer.invoke('templates:ler') || []
+    tmpls.splice(i,1)
+    await ipcRenderer.invoke('templates:salvar', tmpls)
+    carregar()
+  })
+}
+carregar()
+</script>
+</body></html>

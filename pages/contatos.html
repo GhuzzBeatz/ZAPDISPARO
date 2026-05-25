@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><link rel="stylesheet" href="../css/style.css"><script src="../js/util.js"></script></head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div><div class="page-title">👥 Contatos</div><div class="page-sub">Cadastre e gerencie sua lista de contatos</div></div>
+    <div style="display:flex;gap:10px;align-self:center">
+      <button class="btn btn-ghost" onclick="importarExcel()">📊 Importar Excel / CSV</button>
+      <button class="btn btn-ghost" onclick="exportarCSV()">📥 Exportar CSV</button>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="processarArquivo(this)">
+
+  <div class="form-card">
+    <div class="form-card-title" id="formTitulo">Novo Contato</div>
+    <div class="form-row">
+      <div class="form-group fg2"><label class="form-label">Nome</label><input id="nome" placeholder="Nome completo"></div>
+      <div class="form-group fg2"><label class="form-label">Telefone * (com DDD, sem +55)</label><input id="telefone" placeholder="11999999999" type="tel"></div>
+      <div class="form-group fg2"><label class="form-label">Empresa</label><input id="empresa" placeholder="Nome da empresa"></div>
+    </div>
+    <div class="form-row" style="margin-top:10px">
+      <div class="form-group fg2"><label class="form-label">Produto</label><input id="produto" placeholder="Produto ou serviço"></div>
+      <div class="form-group fg1"><label class="form-label">Valor</label><input id="valor" placeholder="R$ 0,00"></div>
+      <div class="form-group fg1"><label class="form-label">Cidade</label><input id="cidade" placeholder="São Paulo"></div>
+      <div class="form-group fg1"><label class="form-label">Campo 1</label><input id="campo1" placeholder="Dado extra"></div>
+      <div class="form-group fg1"><label class="form-label">Campo 2</label><input id="campo2" placeholder="Dado extra"></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn btn-primary" id="btnSalvar" onclick="salvar()">+ Salvar</button>
+      <button class="btn-cancel" id="btnCancelar" onclick="cancelar()">Cancelar</button>
+    </div>
+    <div class="aviso av-ok"  id="avisoOk"></div>
+    <div class="aviso av-erro" id="avisoErro"></div>
+  </div>
+
+  <!-- Dica de importação -->
+  <div style="background:var(--pbg);border:1px solid var(--pbdr);border-radius:10px;padding:12px 16px;font-size:12px;color:var(--fg2);margin-bottom:14px;line-height:1.8">
+    📊 <b>Importar Excel/CSV:</b> O arquivo deve ter colunas com os nomes: <b>telefone</b> (obrigatório), nome, empresa, produto, valor, cidade, campo1, campo2. Qualquer separador funciona (vírgula ou ponto e vírgula).
+  </div>
+
+  <div class="tbl-wrap">
+    <div class="tbl-top">
+      <span class="tbl-title">Lista de Contatos</span>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input class="search-box" id="busca" placeholder="🔍 Buscar..." oninput="render()" style="width:200px">
+        <span class="tbl-count" id="count"></span>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Nome</th><th>Telefone</th><th>Empresa</th><th>Produto</th><th>Cidade</th><th style="text-align:center">Ações</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let contatos = [], editandoId = null
+
+async function carregar() { contatos = await ipcRenderer.invoke('dados:ler','contatos')||[]; render() }
+
+async function salvar() {
+  const tel = document.getElementById('telefone').value.replace(/\D/g,'')
+  if (!tel||tel.length<8) return aviso('erro','Informe um telefone válido com DDD.')
+  const d = { nome:document.getElementById('nome').value.trim(), telefone:tel, empresa:document.getElementById('empresa').value.trim(), produto:document.getElementById('produto').value.trim(), valor:document.getElementById('valor').value.trim(), cidade:document.getElementById('cidade').value.trim(), campo1:document.getElementById('campo1').value.trim(), campo2:document.getElementById('campo2').value.trim() }
+  if (editandoId!==null) { contatos[editandoId]={...contatos[editandoId],...d}; aviso('ok','Contato atualizado!'); cancelar() }
+  else { contatos.unshift({...d,id:Date.now()}); aviso('ok','Contato salvo!'); limpar() }
+  await ipcRenderer.invoke('dados:salvar','contatos',contatos); render()
+}
+
+function editar(idx) {
+  const c=contatos[idx]; if(!c) return
+  document.getElementById('nome').value     = c.nome||''
+  document.getElementById('telefone').value = c.telefone||''
+  document.getElementById('empresa').value  = c.empresa||''
+  document.getElementById('produto').value  = c.produto||''
+  document.getElementById('valor').value    = c.valor||''
+  document.getElementById('cidade').value   = c.cidade||''
+  document.getElementById('campo1').value   = c.campo1||''
+  document.getElementById('campo2').value   = c.campo2||''
+  document.getElementById('formTitulo').textContent    = '✏️ Editar Contato'
+  document.getElementById('btnSalvar').textContent     = '💾 Salvar'
+  document.getElementById('btnCancelar').style.display = 'inline-flex'
+  editandoId = idx; window.scrollTo({top:0,behavior:'smooth'})
+}
+
+function cancelar() { limpar(); editandoId=null; document.getElementById('formTitulo').textContent='Novo Contato'; document.getElementById('btnSalvar').textContent='+ Salvar'; document.getElementById('btnCancelar').style.display='none' }
+function limpar()   { ['nome','telefone','empresa','produto','valor','cidade','campo1','campo2'].forEach(i=>document.getElementById(i).value='') }
+
+async function excluir(idx) {
+  confirmar('Excluir este contato?', async ok => {
+    if(!ok) return
+    contatos.splice(idx,1)
+    await ipcRenderer.invoke('dados:salvar','contatos',contatos); render()
+  })
+}
+
+function render() {
+  const b = (document.getElementById('busca')?.value||'').toLowerCase()
+  const lista = b ? contatos.filter(c=>(c.nome||'').toLowerCase().includes(b)||(c.telefone||'').includes(b)||(c.empresa||'').toLowerCase().includes(b)) : contatos
+  document.getElementById('count').textContent = contatos.length+' contato(s)'
+  document.getElementById('tbody').innerHTML = lista.length ? lista.map((c,i)=>`
+    <tr>
+      <td><b style="color:var(--fg)">${c.nome||'—'}</b></td>
+      <td style="font-family:monospace;font-size:12px">${c.telefone}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.empresa||'—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.produto||'—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${c.cidade||'—'}</td>
+      <td style="text-align:center;white-space:nowrap">
+        <button class="btn-edit" onclick="editar(${contatos.indexOf(c)})">✏️</button>
+        <button class="btn-danger" onclick="excluir(${contatos.indexOf(c)})">🗑️</button>
+      </td>
+    </tr>`).join('') : '<tr><td colspan="6" class="empty">Nenhum contato. Adicione manualmente ou importe um arquivo.</td></tr>'
+}
+
+function importarExcel() { document.getElementById('fileInput').click() }
+
+function processarArquivo(input) {
+  const file=input.files[0]; if(!file) return
+  const ext=file.name.split('.').pop().toLowerCase()
+  if(ext==='csv') { processarCSV(file); return }
+  const reader=new FileReader()
+  reader.onload=async e=>{
+    try {
+      const XLSX=require('xlsx')
+      const wb=XLSX.read(e.target.result,{type:'binary'})
+      const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''})
+      await importarDados(data)
+    } catch(err){ avisoModal('Erro ao ler arquivo: '+err.message) }
+  }
+  reader.readAsBinaryString(file); input.value=''
+}
+
+function processarCSV(file) {
+  const reader=new FileReader()
+  reader.onload=async e=>{
+    const linhas=e.target.result.split('\n').filter(l=>l.trim())
+    if(!linhas.length) return
+    const cols=linhas[0].split(/[;,]/).map(c=>c.trim().toLowerCase().replace(/"/g,''))
+    const dados=linhas.slice(1).map(l=>{const vals=l.split(/[;,]/).map(v=>v.trim().replace(/"/g,'')); const obj={}; cols.forEach((c,i)=>obj[c]=vals[i]||''); return obj}).filter(d=>d.telefone||d.tel)
+    await importarDados(dados)
+  }
+  reader.readAsText(file,'UTF-8')
+}
+
+async function importarDados(data) {
+  const mapa=(obj,...keys)=>{for(const k of keys){const v=obj[k]||obj[k.toUpperCase()]||''; if(v) return String(v)} return ''}
+  const novos=data.map(d=>({ id:Date.now()+Math.random(), nome:mapa(d,'nome','name'), telefone:mapa(d,'telefone','tel','fone','phone','numero','whatsapp').replace(/\D/g,''), empresa:mapa(d,'empresa','company'), produto:mapa(d,'produto','product'), valor:mapa(d,'valor','value','preco'), cidade:mapa(d,'cidade','city'), campo1:mapa(d,'campo1','campo_1'), campo2:mapa(d,'campo2','campo_2') })).filter(c=>c.telefone&&c.telefone.length>=8)
+  contatos = [...novos, ...contatos]
+  // Remover duplicatas
+  const seen=new Set(); contatos=contatos.filter(c=>{if(seen.has(c.telefone)) return false; seen.add(c.telefone); return true})
+  await ipcRenderer.invoke('dados:salvar','contatos',contatos)
+  aviso('ok',`${novos.length} contato(s) importado(s)!`); render()
+}
+
+function exportarCSV() {
+  if(!contatos.length) return avisoModal('Nenhum contato para exportar.')
+  const cols=['nome','telefone','empresa','produto','valor','cidade','campo1','campo2']
+  const csv=cols.join(';')+'\n'+contatos.map(c=>cols.map(k=>'"'+(c[k]||'')+'"').join(';')).join('\n')
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'})
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='contatos_zapdisparo.csv'; a.click(); URL.revokeObjectURL(url)
+}
+
+carregar()
+</script>
+</body></html>

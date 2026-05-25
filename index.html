@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>ZapDisparo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/licenca.js"></script>
+  <script>
+    if (!licencaAtivaZD()) window.location.replace('pages/licenca.html')
+  </script>
+</head>
+<body>
+<div class="container">
+  <div class="menu">
+    <div class="menu-logo">
+      <div class="logo-icon" style="padding:0;overflow:hidden"><img src="logo.png" style="width:38px;height:38px;object-fit:cover;border-radius:10px"></div>
+      <span class="logo-text">Zap<span class="logo-accent">Disparo</span></span>
+    </div>
+
+    <div class="status-pill sp-desconectado" id="statusPill">
+      <div class="status-dot"></div>
+      <span id="statusTxt">Desconectado</span>
+    </div>
+
+    <nav class="menu-nav">
+      <button class="nav-btn active" onclick="ir('pages/dashboard.html',this)">
+        <span class="nav-icon">🏠</span> Dashboard
+      </button>
+      <button class="nav-btn" onclick="ir('pages/disparo.html',this)">
+        <span class="nav-icon">🚀</span> Novo Disparo
+      </button>
+      <div class="nav-sep"></div>
+      <div class="nav-group-label">Gerenciar</div>
+      <button class="nav-btn" onclick="ir('pages/contatos.html',this)">
+        <span class="nav-icon">👥</span> Contatos
+      </button>
+      <button class="nav-btn" onclick="ir('pages/templates.html',this)">
+        <span class="nav-icon">📝</span> Modelos de Mensagem
+      </button>
+      <button class="nav-btn" onclick="ir('pages/historico.html',this)">
+        <span class="nav-icon">📜</span> Histórico
+      </button>
+      <div class="nav-sep"></div>
+      <button class="nav-btn" onclick="ir('pages/conexao.html',this)">
+        <span class="nav-icon">📱</span> Conexão WhatsApp
+      </button>
+      <button class="nav-btn" onclick="ir('pages/como_usar.html',this)">
+        <span class="nav-icon">📖</span> Como Usar
+      </button>
+      <button class="nav-btn" onclick="ir('pages/sobre.html',this)">
+        <span class="nav-icon">ℹ️</span> Sobre
+      </button>
+    </nav>
+
+    <div class="menu-footer">
+      <button class="btn-tema" onclick="alternarTema()">
+        <span id="temaIcon">☀️</span>
+        <span id="temaLabel">Modo Claro</span>
+      </button>
+      <div class="menu-footer-brand">Desenvolvido por</div>
+      <div class="menu-footer-name">GHZ Plugin</div>
+    </div>
+  </div>
+
+  <div class="conteudo">
+    <iframe id="frame" src="pages/dashboard.html"></iframe>
+  </div>
+</div>
+
+<script>
+const { ipcRenderer } = require('electron')
+
+// Tema
+const tema = localStorage.getItem('@ZAPDISPARO:tema') || 'dark'
+document.documentElement.setAttribute('data-tema', tema)
+document.getElementById('temaIcon').textContent  = tema === 'dark' ? '☀️' : '🌙'
+document.getElementById('temaLabel').textContent = tema === 'dark' ? 'Modo Claro' : 'Modo Escuro'
+
+function ir(pagina, btn) {
+  document.getElementById('frame').src = pagina
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
+  if (btn) btn.classList.add('active')
+}
+
+function alternarTema() {
+  const atual = localStorage.getItem('@ZAPDISPARO:tema') || 'dark'
+  const novo  = atual === 'dark' ? 'light' : 'dark'
+  localStorage.setItem('@ZAPDISPARO:tema', novo)
+  document.documentElement.setAttribute('data-tema', novo)
+  document.getElementById('temaIcon').textContent  = novo === 'dark' ? '☀️' : '🌙'
+  document.getElementById('temaLabel').textContent = novo === 'dark' ? 'Modo Claro' : 'Modo Escuro'
+  const f = document.getElementById('frame'); f.src = f.src
+}
+
+// ── HELPER: repassa evento para o iframe ──────────────────
+function repassa(tipo, dados) {
+  try {
+    document.getElementById('frame').contentWindow.postMessage({ tipo, dados }, '*')
+  } catch(e) {}
+}
+
+// ── STATUS WHATSAPP ──────────────────────────────────────
+const STATUS_LABELS = {
+  desconectado:'Desconectado', conectando:'Conectando...',
+  aguardando_qr:'Aguardando QR', autenticado:'Autenticando...',
+  conectado:'Conectado ✓'
+}
+const STATUS_CLASSES = {
+  desconectado:'sp-desconectado', conectando:'sp-conectando',
+  aguardando_qr:'sp-conectando',  autenticado:'sp-conectando',
+  conectado:'sp-conectado'
+}
+
+ipcRenderer.on('zd:wstatus', (e, d) => {
+  const pill = document.getElementById('statusPill')
+  const txt  = document.getElementById('statusTxt')
+  pill.className = 'status-pill ' + (STATUS_CLASSES[d.status] || 'sp-desconectado')
+  txt.textContent = STATUS_LABELS[d.status] || d.status
+  repassa('zd:wstatus', d)
+})
+
+ipcRenderer.on('zd:qr',   (e, d) => repassa('zd:qr',   d))
+ipcRenderer.on('zd:log',  (e, d) => repassa('zd:log',  d))
+ipcRenderer.on('zd:update_status', (e, d) => repassa('zd:update_status', d))
+
+// ── DISPARO ───────────────────────────────────────────────
+ipcRenderer.on('zd:disparo_inicio',    (e, d) => repassa('zd:disparo_inicio',    d))
+ipcRenderer.on('zd:disparo_progresso', (e, d) => repassa('zd:disparo_progresso', d))
+ipcRenderer.on('zd:disparo_fim',       (e, d) => repassa('zd:disparo_fim',       d))
+ipcRenderer.on('zd:aguardando',        (e, d) => repassa('zd:aguardando',        d))
+ipcRenderer.on('zd:disparo_erro',      (e, d) => repassa('zd:disparo_erro',      d))
+</script>
+</body>
+</html>
