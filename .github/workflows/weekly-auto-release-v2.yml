@@ -38,7 +38,7 @@ jobs:
         run: npm run ci:bump-version
 
       - name: Build installer
-        run: npm run build
+        run: npm run build -- --publish never
 
       - name: Resolve build artifacts
         shell: pwsh
