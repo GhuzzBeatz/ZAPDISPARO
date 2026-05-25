@@ -1,0 +1,11 @@
+name: Manual Dispatch Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print
+        run: echo "Workflow dispatch funcionando."
