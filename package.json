@@ -1,6 +1,6 @@
 {
   "name": "zapdisparo",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "ZapDisparo - Disparador de Mensagens em Massa para WhatsApp",
   "main": "main.js",
   "author": "GHZ Plugin",
