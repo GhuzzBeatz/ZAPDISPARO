@@ -17,13 +17,31 @@ Sem isso, o workflow nao consegue:
 - commitar `update-manifest.json`
 - criar releases
 
-## 3) Publicar o arquivo de manifesto remoto
+## 3) Ativar alerta no WhatsApp (sucesso e erro)
+O workflow envia aviso no numero `+55 11 96704-2032` quando:
+- a atualizacao semanal concluir com sucesso
+- ocorrer falha (com job/etapa e link dos logs)
+
+Para ativar:
+1. Abra contato com o bot do CallMeBot e autorize sua conta:
+   - adicione `+34 623 78 64 49`
+   - envie: `I allow callmebot to send me messages`
+2. Copie a API key recebida no WhatsApp.
+3. No repositorio GitHub:
+   - `Settings` -> `Secrets and variables` -> `Actions`
+   - `New repository secret`
+   - Nome: `WHATSAPP_ALERT_APIKEY`
+   - Valor: (sua chave da CallMeBot)
+
+Sem esse secret, o workflow roda normal, mas nao envia aviso no WhatsApp.
+
+## 4) Publicar o arquivo de manifesto remoto
 O workflow atualiza automaticamente `update-manifest.json` na branch `main`.
 Use esta URL no cliente:
 
 `https://raw.githubusercontent.com/GhuzzBeatz/repositorio-para-codex-pc-mantris/main/update-manifest.json`
 
-## 4) Configurar os clientes para usar o manifesto remoto
+## 5) Configurar os clientes para usar o manifesto remoto
 No cliente, arquivo de dados do app:
 - `%APPDATA%\\ZapDisparo\\data\\update_config.json`
 
@@ -34,7 +52,7 @@ Conteudo:
 }
 ```
 
-## 5) Disparar a primeira release automaticamente
+## 6) Disparar a primeira release automaticamente
 No GitHub:
 - `Actions` -> `Weekly Auto Release` -> `Run workflow`
 
@@ -45,7 +63,7 @@ O workflow vai:
 4. Criar/atualizar release GitHub com os binarios
 5. Atualizar `update-manifest.json` com a URL real do setup
 
-## 6) Rotina semanal
+## 7) Rotina semanal
 - O workflow roda toda segunda-feira (cron no arquivo YAML).
 - O app do cliente encontra a nova versao pelo botao:
   `Atualizar App (WhatsApp + Chromium)`
