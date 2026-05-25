@@ -1,4 +1,4 @@
-﻿# Passo a passo: update automatico semanal (cliente)
+# Passo a passo: update automatico semanal (cliente)
 
 Este projeto ja possui botao de atualizacao no app e rotina semanal de checagem.
 Com este workflow, voce nao precisa vir manualmente gerar setup toda semana.
