@@ -18,7 +18,7 @@ Sem isso, o workflow nao consegue:
 - criar releases
 
 ## 3) Ativar alerta no WhatsApp (sucesso e erro)
-O workflow envia aviso no numero `+55 11 96704-2032` quando:
+O workflow envia aviso no numero `+55 11 94898-1459` quando:
 - a atualizacao semanal concluir com sucesso
 - ocorrer falha (com job/etapa e link dos logs)
 

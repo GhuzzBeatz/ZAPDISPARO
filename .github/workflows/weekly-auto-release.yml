@@ -135,7 +135,7 @@ jobs:
     needs: build-release
     if: ${{ always() && needs.build-release.result != 'cancelled' }}
     env:
-      WHATSAPP_ALERT_PHONE: "+5511967042032"
+      WHATSAPP_ALERT_PHONE: "5511948981459"
       WHATSAPP_ALERT_APIKEY: ${{ secrets.WHATSAPP_ALERT_APIKEY }}
       WORKFLOW_RESULT: ${{ needs.build-release.result }}
 
