@@ -61,16 +61,7 @@
           <button class="btn btn-ghost" onclick="desconectar()" style="justify-content:flex-start;padding:11px 16px">Desconectar</button>
           <div style="height:1px;background:var(--border);margin:4px 0"></div>
           <button class="btn btn-ghost" onclick="limpar()" style="justify-content:flex-start;padding:11px 16px;color:var(--red)">Limpar Sessao (novo QR Code)</button>
-          <button class="btn btn-ghost" onclick="verificarAtualizacao()" style="justify-content:flex-start;padding:11px 16px">Atualizar App (WhatsApp + Chromium)</button>
-          <button class="btn btn-ghost" onclick="executarRotinaSemanalAgora()" style="justify-content:flex-start;padding:11px 16px">Executar rotina semanal agora</button>
         </div>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--fg2)">
-          <input type="checkbox" id="weeklyAutoCheck" onchange="alterarSemanal(this.checked)" style="width:15px;height:15px">
-          Checar atualizacao semanal ao abrir o app
-        </label>
-        <div id="weeklyInfo" style="display:none;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.7"></div>
-        <div id="updateStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--muted)"></div>
-        <div id="engineInfo" style="display:none;margin-top:10px;padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);font-size:11px;color:var(--fg2);line-height:1.7"></div>
         <div class="aviso av-ok" id="avisoOk" style="margin-top:10px"></div>
         <div class="aviso av-erro" id="avisoErro" style="margin-top:10px"></div>
       </div>
@@ -342,18 +333,6 @@ window.addEventListener('message', (e) => {
 async function inicializarPainel() {
   checarStatus()
   pollInterval = setInterval(checarStatus, 3000)
-  await carregarStatusSemanal()
-  await carregarInfoMotores()
-
-  // Checagem semanal automatica (silenciosa) quando estiver vencida.
-  const auto = await ipcRenderer.invoke('app:update-weekly-run', { force: false })
-  if (auto && auto.ok) {
-    atualizarInfoSemanal(auto)
-    if (auto.checked && auto.updateCheck?.ok && auto.updateCheck.hasUpdate) {
-      setUpdateStatus(`Atualizacao semanal encontrou nova versao (${auto.updateCheck.latestVersion}).`, 'ok')
-      aviso('ok', `Nova versao disponivel (${auto.updateCheck.latestVersion}). Clique em "Atualizar App (WhatsApp + Chromium)" para instalar.`)
-    }
-  }
 }
 
 inicializarPainel()

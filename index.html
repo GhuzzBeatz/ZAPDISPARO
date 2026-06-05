@@ -10,6 +10,7 @@
   </script>
 </head>
 <body>
+<div class="app-titlebar">Zap<span>Disparo</span></div>
 <div class="container">
   <div class="menu">
     <div class="menu-logo">
@@ -23,31 +24,37 @@
     </div>
 
     <nav class="menu-nav">
-      <button class="nav-btn active" onclick="ir('pages/dashboard.html',this)">
+      <button class="nav-btn active" data-page="pages/dashboard.html" onclick="ir('pages/dashboard.html',this)">
         <span class="nav-icon">🏠</span> Dashboard
       </button>
-      <button class="nav-btn" onclick="ir('pages/disparo.html',this)">
+      <button class="nav-btn" data-page="pages/disparo.html" onclick="ir('pages/disparo.html',this)">
         <span class="nav-icon">🚀</span> Novo Disparo
+      </button>
+      <button class="nav-btn" data-page="pages/agendadas.html" onclick="ir('pages/agendadas.html',this)">
+        <span class="nav-icon">AG</span> Agendadas
       </button>
       <div class="nav-sep"></div>
       <div class="nav-group-label">Gerenciar</div>
-      <button class="nav-btn" onclick="ir('pages/contatos.html',this)">
+      <button class="nav-btn" data-page="pages/contatos.html" onclick="ir('pages/contatos.html',this)">
         <span class="nav-icon">👥</span> Contatos
       </button>
-      <button class="nav-btn" onclick="ir('pages/templates.html',this)">
+      <button class="nav-btn" data-page="pages/templates.html" onclick="ir('pages/templates.html',this)">
         <span class="nav-icon">📝</span> Modelos de Mensagem
       </button>
-      <button class="nav-btn" onclick="ir('pages/historico.html',this)">
+      <button class="nav-btn" data-page="pages/historico.html" onclick="ir('pages/historico.html',this)">
         <span class="nav-icon">📜</span> Histórico
       </button>
       <div class="nav-sep"></div>
-      <button class="nav-btn" onclick="ir('pages/conexao.html',this)">
+      <button class="nav-btn" data-page="pages/conexao.html" onclick="ir('pages/conexao.html',this)">
         <span class="nav-icon">📱</span> Conexão WhatsApp
       </button>
-      <button class="nav-btn" onclick="ir('pages/como_usar.html',this)">
+      <button class="nav-btn" data-page="pages/atualizacao.html" onclick="ir('pages/atualizacao.html',this)">
+        <span class="nav-icon">UP</span> Atualizacao
+      </button>
+      <button class="nav-btn" data-page="pages/como_usar.html" onclick="ir('pages/como_usar.html',this)">
         <span class="nav-icon">📖</span> Como Usar
       </button>
-      <button class="nav-btn" onclick="ir('pages/sobre.html',this)">
+      <button class="nav-btn" data-page="pages/sobre.html" onclick="ir('pages/sobre.html',this)">
         <span class="nav-icon">ℹ️</span> Sobre
       </button>
     </nav>
@@ -63,6 +70,16 @@
   </div>
 
   <div class="conteudo">
+    <div class="update-notice" id="updateNotice">
+      <div>
+        <div class="update-notice-title">Atualizacao pendente ha mais de 1 semana</div>
+        <div class="update-notice-text" id="updateNoticeText">Abra a aba Atualizacao para baixar o pacote novo.</div>
+      </div>
+      <div class="update-notice-actions">
+        <button class="btn btn-primary" onclick="abrirAtualizacao()">Abrir Atualizacao</button>
+        <button class="btn btn-ghost" onclick="ocultarAvisoUpdate()">Lembrar depois</button>
+      </div>
+    </div>
     <iframe id="frame" src="pages/dashboard.html"></iframe>
   </div>
 </div>
@@ -80,6 +97,47 @@ function ir(pagina, btn) {
   document.getElementById('frame').src = pagina
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'))
   if (btn) btn.classList.add('active')
+}
+
+function abrirAtualizacao() {
+  const btn = document.querySelector('.nav-btn[data-page="pages/atualizacao.html"]')
+  ir('pages/atualizacao.html', btn)
+  document.getElementById('updateNotice').style.display = 'none'
+}
+
+function ocultarAvisoUpdate() {
+  const el = document.getElementById('updateNotice')
+  const versao = el.dataset.version || 'pendente'
+  localStorage.setItem('@ZAPDISPARO:updateNoticeDismissed:' + versao, new Date().toISOString().slice(0, 10))
+  el.style.display = 'none'
+}
+
+async function checarAvisoUpdatePendente() {
+  const el = document.getElementById('updateNotice')
+  const txt = document.getElementById('updateNoticeText')
+  if (!el || !txt) return
+
+  const r = await ipcRenderer.invoke('app:update-pending-notice')
+  if (!r || !r.ok || !r.show) {
+    el.style.display = 'none'
+    return
+  }
+
+  const versao = r.pendingUpdateVersion || r.latestVersion || 'pendente'
+  const key = '@ZAPDISPARO:updateNoticeDismissed:' + versao
+  const hoje = new Date().toISOString().slice(0, 10)
+  if (localStorage.getItem(key) === hoje) return
+
+  el.dataset.version = versao
+  txt.textContent = `Existe uma nova versao (${r.latestVersion || versao}) aguardando ha ${r.daysPending || 7} dia(s). Abra Atualizacao para baixar app + WhatsApp + Chromium.`
+  el.style.display = 'flex'
+}
+
+async function rodarChecagemSemanalSilenciosa() {
+  try {
+    await ipcRenderer.invoke('app:update-weekly-run', { force: false })
+    await checarAvisoUpdatePendente()
+  } catch(e) {}
 }
 
 function alternarTema() {
@@ -122,6 +180,7 @@ ipcRenderer.on('zd:wstatus', (e, d) => {
 ipcRenderer.on('zd:qr',   (e, d) => repassa('zd:qr',   d))
 ipcRenderer.on('zd:log',  (e, d) => repassa('zd:log',  d))
 ipcRenderer.on('zd:update_status', (e, d) => repassa('zd:update_status', d))
+ipcRenderer.on('zd:agendadas_atualizadas', (e, d) => repassa('zd:agendadas_atualizadas', d))
 
 // ── DISPARO ───────────────────────────────────────────────
 ipcRenderer.on('zd:disparo_inicio',    (e, d) => repassa('zd:disparo_inicio',    d))
@@ -129,6 +188,10 @@ ipcRenderer.on('zd:disparo_progresso', (e, d) => repassa('zd:disparo_progresso',
 ipcRenderer.on('zd:disparo_fim',       (e, d) => repassa('zd:disparo_fim',       d))
 ipcRenderer.on('zd:aguardando',        (e, d) => repassa('zd:aguardando',        d))
 ipcRenderer.on('zd:disparo_erro',      (e, d) => repassa('zd:disparo_erro',      d))
+
+rodarChecagemSemanalSilenciosa()
+checarAvisoUpdatePendente()
+setInterval(checarAvisoUpdatePendente, 60 * 60 * 1000)
 </script>
 </body>
 </html>

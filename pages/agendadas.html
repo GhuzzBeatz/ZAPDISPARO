@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/util.js"></script>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Mensagens Agendadas</div>
+      <div class="page-sub">Programe lembretes, aniversarios e mensagens para enviar no dia e horario certo</div>
+    </div>
+  </div>
+
+  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+    <div class="kpi-card">
+      <div><div class="kpi-label">Total</div><div class="kpi-val" id="kpiTotal">0</div></div>
+      <div class="kpi-icon ki-b">#</div>
+    </div>
+    <div class="kpi-card">
+      <div><div class="kpi-label">Pendentes</div><div class="kpi-val" id="kpiPendentes">0</div></div>
+      <div class="kpi-icon ki-y">P</div>
+    </div>
+    <div class="kpi-card">
+      <div><div class="kpi-label">Enviadas</div><div class="kpi-val" id="kpiEnviadas">0</div></div>
+      <div class="kpi-icon ki-g">OK</div>
+    </div>
+    <div class="kpi-card">
+      <div><div class="kpi-label">Com erro</div><div class="kpi-val" id="kpiErros">0</div></div>
+      <div class="kpi-icon ki-r">!</div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-card-title">Novo agendamento</div>
+    <div class="form-row">
+      <div class="form-group fg2">
+        <label class="form-label">Nome do cliente (opcional)</label>
+        <input id="nome" placeholder="Ex: Maria">
+      </div>
+      <div class="form-group fg2">
+        <label class="form-label">Telefone com DDD</label>
+        <input id="telefone" placeholder="Ex: 21964317838">
+      </div>
+      <div class="form-group fg1">
+        <label class="form-label">Data</label>
+        <input id="data" type="date">
+      </div>
+      <div class="form-group fg1">
+        <label class="form-label">Horario</label>
+        <input id="hora" type="time">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group fg3">
+        <label class="form-label">Mensagem</label>
+        <textarea id="mensagem" rows="5" placeholder="Ex: Oi {nome}, passando para lembrar da sua aula hoje as 15h."></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-top:12px">
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        O app precisa estar aberto e o WhatsApp conectado no horario marcado.
+      </div>
+      <button class="btn btn-primary" onclick="salvarAgendamento()">Salvar agendamento</button>
+    </div>
+    <div class="aviso av-ok" id="avisoOk"></div>
+    <div class="aviso av-erro" id="avisoErro"></div>
+  </div>
+
+  <div class="tbl-wrap">
+    <div class="tbl-top">
+      <div>
+        <div class="tbl-title">Lista de mensagens agendadas</div>
+        <div class="tbl-count" id="listaCount">0 agendamento(s)</div>
+      </div>
+      <button class="btn btn-ghost" onclick="carregar()">Atualizar lista</button>
+    </div>
+    <div id="listaBox"></div>
+  </div>
+</div>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let agendadas = []
+
+function escapar(txt) {
+  return String(txt || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function fmtDataHora(iso) {
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return '-'
+  return dt.toLocaleString('pt-BR')
+}
+
+function statusBadge(status) {
+  if (status === 'enviado') return '<span class="badge b-g">Enviado</span>'
+  if (status === 'erro') return '<span class="badge b-r">Erro</span>'
+  return '<span class="badge b-y">Pendente</span>'
+}
+
+function ordenarLista(lista) {
+  const peso = { pendente: 1, erro: 2, enviado: 3 }
+  return lista.slice().sort((a, b) => {
+    const pa = peso[a.status] || 9
+    const pb = peso[b.status] || 9
+    if (pa !== pb) return pa - pb
+    return Date.parse(a.scheduledAt || '') - Date.parse(b.scheduledAt || '')
+  })
+}
+
+function renderizar() {
+  const total = agendadas.length
+  const pendentes = agendadas.filter(i => i.status === 'pendente').length
+  const enviadas = agendadas.filter(i => i.status === 'enviado').length
+  const erros = agendadas.filter(i => i.status === 'erro').length
+  document.getElementById('kpiTotal').textContent = total
+  document.getElementById('kpiPendentes').textContent = pendentes
+  document.getElementById('kpiEnviadas').textContent = enviadas
+  document.getElementById('kpiErros').textContent = erros
+  document.getElementById('listaCount').textContent = `${total} agendamento(s)`
+
+  const box = document.getElementById('listaBox')
+  if (!total) {
+    box.innerHTML = '<div class="empty">Nenhuma mensagem agendada ainda</div>'
+    return
+  }
+
+  const linhas = ordenarLista(agendadas).map((item) => {
+    const erro = item.status === 'erro' && item.lastError
+      ? `<div style="font-size:11px;color:var(--red);margin-top:4px">${escapar(item.lastError)}</div>`
+      : ''
+    const enviarBtn = item.status === 'erro'
+      ? `<button class="btn btn-primary" onclick="enviarAgora('${item.id}')">Enviar mensagem</button>`
+      : ''
+    const removerTxt = item.status === 'pendente' ? 'Cancelar' : 'Remover'
+
+    return `<tr>
+      <td style="white-space:nowrap">${fmtDataHora(item.scheduledAt)}</td>
+      <td>
+        <div style="font-weight:800;color:var(--fg)">${escapar(item.nome || 'Sem nome')}</div>
+        <div style="font-family:monospace;color:var(--muted);font-size:12px">${escapar(item.telefone)}</div>
+      </td>
+      <td>
+        <div style="max-width:420px;white-space:pre-wrap;line-height:1.5">${escapar(item.mensagem)}</div>
+        ${erro}
+      </td>
+      <td>${statusBadge(item.status)}</td>
+      <td>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${enviarBtn}
+          <button class="btn btn-ghost" onclick="remover('${item.id}')">${removerTxt}</button>
+        </div>
+      </td>
+    </tr>`
+  }).join('')
+
+  box.innerHTML = `<table>
+    <thead><tr><th>Horario</th><th>Contato</th><th>Mensagem</th><th>Status</th><th>Acoes</th></tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>`
+}
+
+function preencherHorarioPadrao() {
+  const agora = new Date(Date.now() + 5 * 60 * 1000)
+  const pad = (n) => String(n).padStart(2, '0')
+  document.getElementById('data').value = `${agora.getFullYear()}-${pad(agora.getMonth() + 1)}-${pad(agora.getDate())}`
+  document.getElementById('hora').value = `${pad(agora.getHours())}:${pad(agora.getMinutes())}`
+}
+
+async function carregar() {
+  await ipcRenderer.invoke('agendadas:processar')
+  const r = await ipcRenderer.invoke('agendadas:listar')
+  agendadas = r && r.ok ? (r.itens || []) : []
+  renderizar()
+}
+
+async function salvarAgendamento() {
+  const data = document.getElementById('data').value
+  const hora = document.getElementById('hora').value
+  if (!data || !hora) {
+    aviso('erro', 'Informe data e horario.')
+    return
+  }
+
+  const scheduledAt = new Date(`${data}T${hora}:00`).toISOString()
+  const r = await ipcRenderer.invoke('agendadas:criar', {
+    nome: document.getElementById('nome').value,
+    telefone: document.getElementById('telefone').value,
+    mensagem: document.getElementById('mensagem').value,
+    scheduledAt
+  })
+
+  if (!r || !r.ok) {
+    aviso('erro', r?.motivo || 'Nao foi possivel salvar o agendamento.')
+    return
+  }
+
+  document.getElementById('nome').value = ''
+  document.getElementById('telefone').value = ''
+  document.getElementById('mensagem').value = ''
+  preencherHorarioPadrao()
+  aviso('ok', 'Mensagem agendada com sucesso.')
+  await carregar()
+}
+
+async function enviarAgora(id) {
+  const r = await ipcRenderer.invoke('agendadas:enviar-agora', id)
+  if (!r || !r.ok) {
+    aviso('erro', r?.motivo || 'Nao foi possivel enviar agora.')
+  } else {
+    aviso('ok', 'Mensagem enviada com sucesso.')
+  }
+  await carregar()
+}
+
+async function remover(id) {
+  confirmar('Remover este agendamento?', async (ok) => {
+    if (!ok) return
+    await ipcRenderer.invoke('agendadas:remover', id)
+    await carregar()
+  }, 'Remover')
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.tipo === 'zd:agendadas_atualizadas') carregar()
+})
+
+preencherHorarioPadrao()
+carregar()
+</script>
+</body>
+</html>

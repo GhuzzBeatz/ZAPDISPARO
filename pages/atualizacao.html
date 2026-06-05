@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="../css/style.css">
+  <script src="../js/util.js"></script>
+</head>
+<body>
+<div class="page-wrap">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Atualizacao</div>
+      <div class="page-sub">Baixe o pacote mais recente do app, motor WhatsApp e Chromium</div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <div class="form-card">
+        <div class="form-card-title">Atualizar pelo GitHub</div>
+        <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:var(--fg2);line-height:1.7">
+          Clique em verificar para buscar a versao mais nova. Se existir atualizacao, o app baixa o instalador correto e abre para instalar.
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="verificarAtualizacao()">Verificar e baixar atualizacao</button>
+          <button class="btn btn-ghost" onclick="executarRotinaSemanalAgora()">Executar rotina semanal agora</button>
+        </div>
+        <div id="updateStatus" style="display:none;margin-top:12px;font-size:12px;color:var(--muted);line-height:1.7"></div>
+        <div class="aviso av-ok" id="avisoOk"></div>
+        <div class="aviso av-erro" id="avisoErro"></div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">Checagem automatica</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg2)">
+          <input type="checkbox" id="weeklyAutoCheck" onchange="alterarSemanal(this.checked)" style="width:15px;height:15px">
+          Checar atualizacao semanal ao abrir o app
+        </label>
+        <div id="weeklyInfo" style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.8"></div>
+        <div style="margin-top:12px;background:var(--ybg);border:1px solid rgba(251,191,36,.25);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--fg2);line-height:1.7">
+          Se uma nova versao ficar pendente por mais de 1 semana, o app mostra um aviso interno apontando para esta aba.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="form-card">
+        <div class="form-card-title">Pacote instalado</div>
+        <div id="engineInfo" style="padding:12px 14px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);font-size:12px;color:var(--fg2);line-height:1.8">
+          Carregando informacoes...
+        </div>
+      </div>
+
+      <div class="form-card">
+        <div class="form-card-title">O que esta atualizacao troca?</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--fg2);line-height:1.7">
+          <div><b style="color:var(--fg)">App:</b> telas, funcoes, correcoes e melhorias.</div>
+          <div><b style="color:var(--fg)">WhatsApp:</b> biblioteca interna usada para conversar com WhatsApp Web.</div>
+          <div><b style="color:var(--fg)">Chromium/Chrome:</b> navegador usado por baixo para abrir a sessao do WhatsApp.</div>
+          <div style="background:var(--gbg);border:1px solid rgba(37,211,102,.25);border-radius:8px;padding:10px">
+            Para o cliente, basta clicar no botao de atualizacao e seguir o instalador.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+aplicarTemaAtual()
+const { ipcRenderer } = require('electron')
+let atualizando = false
+
+function formatarDataHoraLocal(iso) {
+  if (!iso) return 'nunca'
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return 'nunca'
+  return dt.toLocaleString('pt-BR')
+}
+
+function setUpdateStatus(texto, tipo) {
+  const el = document.getElementById('updateStatus')
+  if (!el) return
+  if (!texto) {
+    el.style.display = 'none'
+    el.textContent = ''
+    return
+  }
+  el.style.display = 'block'
+  el.textContent = texto
+  el.style.color = tipo === 'erro'
+    ? 'var(--red)'
+    : (tipo === 'ok' ? 'var(--primary)' : 'var(--muted)')
+}
+
+function atualizarInfoSemanal(data) {
+  const box = document.getElementById('weeklyInfo')
+  const chk = document.getElementById('weeklyAutoCheck')
+  if (!box || !chk) return
+  chk.checked = !!data?.weeklyEnabled
+  const pendente = data?.pendingUpdateVersion
+    ? `<br>Atualizacao pendente: <b>v${data.pendingUpdateVersion}</b> desde <b>${formatarDataHoraLocal(data.pendingUpdateDetectedAt)}</b>`
+    : ''
+  box.innerHTML =
+    'Ultima verificacao: <b>' + formatarDataHoraLocal(data?.lastCheckAt) + '</b><br>' +
+    'Proxima verificacao: <b>' + formatarDataHoraLocal(data?.nextCheckAt) + '</b>' +
+    pendente
+}
+
+async function carregarStatusSemanal() {
+  const r = await ipcRenderer.invoke('app:update-weekly-status')
+  if (!r || !r.ok) return
+  atualizarInfoSemanal(r)
+}
+
+async function alterarSemanal(enabled) {
+  const r = await ipcRenderer.invoke('app:update-weekly-set-enabled', enabled)
+  if (!r || !r.ok) return
+  atualizarInfoSemanal(r)
+  aviso('ok', enabled ? 'Checagem semanal ativada.' : 'Checagem semanal desativada.')
+}
+
+function renderEngineInfo(info) {
+  const el = document.getElementById('engineInfo')
+  if (!el) return
+  if (!info || !info.appVersion) {
+    el.textContent = 'Nao foi possivel carregar as informacoes do pacote.'
+    return
+  }
+  const navegador = info.navegadorPath ? info.navegadorPath : 'Nao encontrado'
+  el.innerHTML =
+    '<b>App:</b> v' + info.appVersion + '<br>' +
+    '<b>WhatsApp (lib):</b> ' + (info.whatsappWebJsVersion || 'desconhecida') + '<br>' +
+    '<b>Navegador detectado:</b> ' + navegador + '<br>' +
+    '<b>WhatsApp:</b> ' + info.regraAtualizacaoWhatsapp + '<br>' +
+    '<b>Chrome/Chromium:</b> ' + info.regraAtualizacaoChrome
+}
+
+async function carregarInfoMotores() {
+  const info = await ipcRenderer.invoke('app:engine-status')
+  renderEngineInfo(info)
+}
+
+async function aplicarResultadoUpdate(r, origem) {
+  await carregarStatusSemanal()
+
+  if (!r || !r.ok) {
+    const msg = r && r.configured === false
+      ? 'Atualizador nao configurado. Verifique o manifesto update-manifest.json.'
+      : `Falha ao verificar atualizacao: ${r?.message || 'erro desconhecido'}`
+    setUpdateStatus(msg, 'erro')
+    if (origem === 'manual') aviso('erro', msg)
+    return
+  }
+
+  if (!r.hasUpdate) {
+    const msg = `Aplicativo atualizado (versao ${r.currentVersion}) - pacote WhatsApp + Chromium em dia.`
+    setUpdateStatus(msg, 'ok')
+    if (origem === 'manual') aviso('ok', msg)
+    return
+  }
+
+  const pergunta = `Nova versao encontrada (${r.latestVersion}). Deseja baixar e instalar agora? Isso atualiza app + motor WhatsApp + Chromium.`
+  confirmar(pergunta, async (ok) => {
+    if (!ok) return
+    atualizando = true
+    setUpdateStatus('Iniciando download...', '')
+    const dl = await ipcRenderer.invoke('app:update-download-install', {
+      downloadUrl: r.downloadUrl,
+      latestVersion: r.latestVersion
+    })
+    atualizando = false
+    if (!dl || !dl.ok) {
+      const msg = `Falha ao baixar atualizacao: ${dl?.message || 'erro desconhecido'}`
+      setUpdateStatus(msg, 'erro')
+      aviso('erro', msg)
+      return
+    }
+    setUpdateStatus('Download concluido. Abrindo instalador...', 'ok')
+  }, 'Baixar agora')
+}
+
+async function verificarAtualizacao() {
+  if (atualizando) return
+  setUpdateStatus('Verificando atualizacao do app (WhatsApp + Chromium)...', '')
+  const r = await ipcRenderer.invoke('app:update-check')
+  await aplicarResultadoUpdate(r, 'manual')
+}
+
+async function executarRotinaSemanalAgora() {
+  if (atualizando) return
+  setUpdateStatus('Executando rotina semanal de atualizacao...', '')
+  const r = await ipcRenderer.invoke('app:update-weekly-run', { force: true })
+  atualizarInfoSemanal(r)
+  await carregarInfoMotores()
+  if (!r || !r.ok) {
+    setUpdateStatus('Falha na rotina semanal.', 'erro')
+    aviso('erro', 'Falha na rotina semanal.')
+    return
+  }
+  if (!r.updateCheck) {
+    setUpdateStatus('Rotina semanal executada sem checagem de update.', 'ok')
+    aviso('ok', 'Rotina semanal executada.')
+    return
+  }
+  await aplicarResultadoUpdate(r.updateCheck, 'manual')
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data.tipo !== 'zd:update_status') return
+  const d = e.data.dados || {}
+  if (d.state === 'error') {
+    setUpdateStatus(d.text || 'Erro no atualizador.', 'erro')
+    aviso('erro', d.text || 'Erro no atualizador.')
+  } else if (d.state === 'ready') {
+    setUpdateStatus(d.text || 'Atualizacao pronta para instalar.', 'ok')
+    aviso('ok', d.text || 'Atualizacao pronta.')
+  } else {
+    setUpdateStatus(d.text || 'Atualizando...', '')
+  }
+})
+
+carregarStatusSemanal()
+carregarInfoMotores()
+</script>
+</body>
+</html>

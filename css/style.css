@@ -12,6 +12,7 @@
   --shadow:0 4px 24px rgba(0,0,0,.5);--scard:0 2px 12px rgba(0,0,0,.4);
   --input:#050f05;--scroll:#1e331e;--sidebar:#0b160b;--sfg:rgba(255,255,255,.4);
   --sactive:rgba(37,211,102,.14);
+  --titlebar-h:34px;
 }
 [data-tema="light"]{
   --bg:#f0f5f0;--bg2:#e4ede4;--card:#fff;--card2:#f5faf5;
@@ -31,7 +32,10 @@
 html,body{height:100%;font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--fg);overflow:hidden;transition:background .25s,color .25s}
 /* LAYOUT */
 .container{display:flex;height:100vh}
-.conteudo{flex:1;overflow:hidden;background:var(--bg)}
+.app-titlebar{position:fixed;top:0;left:0;right:0;height:var(--titlebar-h);background:var(--sidebar);border-bottom:1px solid rgba(37,211,102,.10);z-index:50;-webkit-app-region:drag;display:flex;align-items:center;padding-left:12px;color:rgba(255,255,255,.55);font-size:11px;font-weight:700;letter-spacing:.02em}
+.app-titlebar span{color:var(--primary)}
+body>.app-titlebar+.container{height:calc(100vh - var(--titlebar-h));margin-top:var(--titlebar-h)}
+.conteudo{flex:1;overflow:hidden;background:var(--bg);position:relative}
 iframe{width:100%;height:100%;border:none}
 /* SIDEBAR */
 .menu{width:230px;background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid rgba(37,211,102,.08)}
@@ -47,6 +51,11 @@ iframe{width:100%;height:100%;border:none}
 .nav-icon{font-size:15px;flex-shrink:0}
 .nav-sep{height:1px;background:rgba(255,255,255,.05);margin:6px 4px}
 .nav-badge{background:var(--red);color:#fff;border-radius:99px;font-size:10px;font-weight:800;min-width:18px;height:18px;display:none;align-items:center;justify-content:center;padding:0 5px;margin-left:auto}
+/* UPDATE NOTICE */
+.update-notice{position:absolute;top:12px;left:12px;right:12px;z-index:20;background:linear-gradient(135deg,var(--ybg),var(--card));border:1px solid rgba(251,191,36,.35);border-radius:12px;padding:12px 14px;box-shadow:var(--scard);display:none;align-items:center;justify-content:space-between;gap:12px}
+.update-notice-title{font-size:13px;font-weight:900;color:var(--yellow);margin-bottom:2px}
+.update-notice-text{font-size:12px;color:var(--fg2);line-height:1.5}
+.update-notice-actions{display:flex;gap:8px;flex-shrink:0}
 /* STATUS PILL */
 .status-pill{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;margin:8px}
 .sp-conectado{background:rgba(37,211,102,.15);color:var(--primary);border:1px solid rgba(37,211,102,.2)}

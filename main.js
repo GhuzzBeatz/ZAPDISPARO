@@ -68,6 +68,8 @@ function salvarJSON(nome, dados) {
 
 const DEFAULT_UPDATE_MANIFEST_URL = 'https://raw.githubusercontent.com/GhuzzBeatz/ZAPDISPARO/main/update-manifest.json'
 const UPDATE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
+const UPDATE_PENDING_NOTICE_MS = UPDATE_WEEK_MS
+const SCHEDULE_TICK_MS = 30 * 1000
 
 function cmpVersao(a, b) {
   const pa = String(a || '0.0.0').split('.').map(v => Number(v) || 0)
@@ -94,7 +96,9 @@ function lerEstadoUpdate() {
   return {
     weeklyEnabled: st.weeklyEnabled !== false,
     lastCheckAt: typeof st.lastCheckAt === 'string' ? st.lastCheckAt : '',
-    lastResult: typeof st.lastResult === 'object' && st.lastResult ? st.lastResult : null
+    lastResult: typeof st.lastResult === 'object' && st.lastResult ? st.lastResult : null,
+    pendingUpdateVersion: typeof st.pendingUpdateVersion === 'string' ? st.pendingUpdateVersion : '',
+    pendingUpdateDetectedAt: typeof st.pendingUpdateDetectedAt === 'string' ? st.pendingUpdateDetectedAt : ''
   }
 }
 
@@ -119,6 +123,49 @@ function deveChecarSemanalmente(estado) {
   const ts = Date.parse(String(estado.lastCheckAt || ''))
   if (!Number.isFinite(ts)) return true
   return (Date.now() - ts) >= UPDATE_WEEK_MS
+}
+
+function registrarResultadoUpdate(updateCheck, checkedAt = new Date().toISOString()) {
+  const atual = lerEstadoUpdate()
+  const parcial = {
+    lastCheckAt: checkedAt,
+    lastResult: updateCheck || null
+  }
+
+  if (updateCheck && updateCheck.ok && updateCheck.hasUpdate) {
+    const latest = String(updateCheck.latestVersion || '').trim()
+    if (latest) {
+      parcial.pendingUpdateVersion = latest
+      parcial.pendingUpdateDetectedAt = atual.pendingUpdateVersion === latest && atual.pendingUpdateDetectedAt
+        ? atual.pendingUpdateDetectedAt
+        : checkedAt
+    }
+  } else if (updateCheck && updateCheck.ok && !updateCheck.hasUpdate) {
+    parcial.pendingUpdateVersion = ''
+    parcial.pendingUpdateDetectedAt = ''
+  }
+
+  return salvarEstadoUpdate(parcial)
+}
+
+function obterAvisoUpdatePendente() {
+  const estado = lerEstadoUpdate()
+  const detectedTs = Date.parse(String(estado.pendingUpdateDetectedAt || ''))
+  const hasPending = !!estado.pendingUpdateVersion && Number.isFinite(detectedTs)
+  const daysPending = hasPending ? Math.floor((Date.now() - detectedTs) / (24 * 60 * 60 * 1000)) : 0
+  const show = hasPending && (Date.now() - detectedTs) >= UPDATE_PENDING_NOTICE_MS
+  const lastResult = estado.lastResult || {}
+
+  return {
+    ok: true,
+    show,
+    currentVersion: app.getVersion(),
+    latestVersion: lastResult.latestVersion || estado.pendingUpdateVersion || '',
+    pendingUpdateVersion: estado.pendingUpdateVersion || '',
+    pendingUpdateDetectedAt: estado.pendingUpdateDetectedAt || '',
+    daysPending: Math.max(0, daysPending),
+    downloadUrl: lastResult.downloadUrl || ''
+  }
 }
 
 function requisicaoTexto(url, redirects = 0) {
@@ -279,10 +326,7 @@ async function executarRotinaSemanalUpdate(force = false) {
 
   const updateCheck = await verificarAtualizacaoApp()
   const checkedAt = new Date().toISOString()
-  salvarEstadoUpdate({
-    lastCheckAt: checkedAt,
-    lastResult: updateCheck
-  })
+  registrarResultadoUpdate(updateCheck, checkedAt)
 
   return {
     ok: true,
@@ -359,6 +403,8 @@ let reconnectAttempts = 0
 let manualStopRequested = false
 let authFinalizeTimer = null
 let wStarting = false
+let scheduleTimer = null
+let scheduleProcessing = false
 const SESSION_CLIENT_ID = 'zapdisparo-ghz'
 
 function emit(canal, dados) {
@@ -477,6 +523,11 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1360, height: 860, minWidth: 1100, minHeight: 700,
     title: 'ZapDisparo', autoHideMenuBar: true, show: false,
+    backgroundColor: '#0b160b',
+    ...(process.platform === 'win32' ? {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: { color: '#0b160b', symbolColor: '#e8f0e8', height: 34 }
+    } : {}),
     webPreferences: {
       nodeIntegration: true,
       nodeIntegrationInSubFrames: true, // OBRIGATÃ“RIO â€” app usa iframes
@@ -496,6 +547,7 @@ function pararTimers() {
   if (initTimer) { clearTimeout(initTimer); initTimer = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   if (authFinalizeTimer) { clearTimeout(authFinalizeTimer); authFinalizeTimer = null }
+  if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null }
 }
 
 function agendarReconexao(motivo) {
@@ -947,6 +999,251 @@ async function resolverChatIdContato(valorTelefone) {
   return { ok: false, motivo: 'Numero nao encontrado no WhatsApp. Confira DDI/DDD e se o numero existe no app.' }
 }
 
+async function enviarMensagemDireta(payload) {
+  if (!wClient || wStatus !== 'conectado') {
+    return { ok: false, motivo: 'WhatsApp nao conectado. Conecte o WhatsApp e tente novamente.' }
+  }
+
+  const telefone = limparTelefone(payload?.telefone || payload?.numero || '')
+  const mensagem = String(payload?.mensagem || '').trim()
+  if (!telefone || telefone.length < 8) {
+    return { ok: false, motivo: 'Numero invalido. Use DDD + numero.' }
+  }
+  if (!mensagem) {
+    return { ok: false, motivo: 'Mensagem vazia.' }
+  }
+
+  const resolucao = await resolverChatIdContato(telefone)
+  if (!resolucao.ok) {
+    return { ok: false, motivo: resolucao.motivo, numero: telefone }
+  }
+
+  try {
+    const contato = {
+      telefone,
+      numero: telefone,
+      nome: String(payload?.nome || '').trim(),
+      empresa: String(payload?.empresa || '').trim()
+    }
+    const texto = aplicarVariaveis(mensagem, contato)
+    await wClient.sendMessage(resolucao.chatId, texto)
+    return {
+      ok: true,
+      numero: resolucao.numeroCanonico || telefone,
+      chatId: resolucao.chatId
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      numero: resolucao.numeroCanonico || telefone,
+      motivo: traduzirErroEnvio(err.message || String(err))
+    }
+  }
+}
+
+function obterAgendadas() {
+  const lista = lerJSON('agendadas', [])
+  return Array.isArray(lista) ? lista : []
+}
+
+function salvarAgendadas(lista) {
+  salvarJSON('agendadas', Array.isArray(lista) ? lista : [])
+}
+
+function resumirAgendadas(lista = obterAgendadas()) {
+  return {
+    total: lista.length,
+    pendentes: lista.filter(i => i.status === 'pendente').length,
+    enviados: lista.filter(i => i.status === 'enviado').length,
+    erros: lista.filter(i => i.status === 'erro').length
+  }
+}
+
+function emitirAgendadasAtualizadas(lista = obterAgendadas()) {
+  emit('zd:agendadas_atualizadas', resumirAgendadas(lista))
+}
+
+function normalizarAgendada(payload) {
+  const telefone = limparTelefone(payload?.telefone || payload?.numero || '')
+  const mensagem = String(payload?.mensagem || '').trim()
+  const nome = String(payload?.nome || '').trim()
+  const scheduledAtRaw = String(payload?.scheduledAt || '').trim()
+  const scheduledTs = Date.parse(scheduledAtRaw)
+
+  if (!telefone || telefone.length < 8) {
+    return { ok: false, motivo: 'Informe um numero valido com DDD.' }
+  }
+  if (!mensagem) {
+    return { ok: false, motivo: 'Escreva a mensagem que sera enviada.' }
+  }
+  if (!Number.isFinite(scheduledTs)) {
+    return { ok: false, motivo: 'Informe uma data e horario validos.' }
+  }
+  if (scheduledTs < Date.now() - 60 * 1000) {
+    return { ok: false, motivo: 'O horario precisa ser futuro.' }
+  }
+
+  return {
+    ok: true,
+    item: {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      nome,
+      telefone,
+      mensagem,
+      scheduledAt: new Date(scheduledTs).toISOString(),
+      status: 'pendente',
+      attempts: 0,
+      lastError: '',
+      createdAt: new Date().toISOString(),
+      sentAt: '',
+      errorAt: ''
+    }
+  }
+}
+
+function criarAgendada(payload) {
+  const normalizada = normalizarAgendada(payload)
+  if (!normalizada.ok) return normalizada
+
+  const lista = obterAgendadas()
+  lista.unshift(normalizada.item)
+  salvarAgendadas(lista)
+  emitirAgendadasAtualizadas(lista)
+  return { ok: true, item: normalizada.item }
+}
+
+function removerAgendada(id) {
+  const lista = obterAgendadas()
+  const novaLista = lista.filter(item => String(item.id) !== String(id))
+  salvarAgendadas(novaLista)
+  emitirAgendadasAtualizadas(novaLista)
+  return { ok: true }
+}
+
+async function enviarAgendadaPorId(id, manual = false) {
+  const lista = obterAgendadas()
+  const idx = lista.findIndex(item => String(item.id) === String(id))
+  if (idx < 0) return { ok: false, motivo: 'Agendamento nao encontrado.' }
+
+  const item = { ...lista[idx] }
+  const resultado = await enviarMensagemDireta({
+    telefone: item.telefone,
+    nome: item.nome,
+    mensagem: item.mensagem
+  })
+
+  const atualizada = obterAgendadas()
+  const idxAtual = atualizada.findIndex(i => String(i.id) === String(id))
+  if (idxAtual < 0) return { ok: false, motivo: 'Agendamento removido durante o envio.' }
+
+  const agora = new Date().toISOString()
+  atualizada[idxAtual] = {
+    ...atualizada[idxAtual],
+    attempts: Number(atualizada[idxAtual].attempts || 0) + 1,
+    status: resultado.ok ? 'enviado' : 'erro',
+    sentAt: resultado.ok ? agora : atualizada[idxAtual].sentAt || '',
+    errorAt: resultado.ok ? '' : agora,
+    lastError: resultado.ok ? '' : (resultado.motivo || 'Falha no envio.'),
+    manualRetryAt: manual ? agora : atualizada[idxAtual].manualRetryAt || ''
+  }
+  salvarAgendadas(atualizada)
+  emitirAgendadasAtualizadas(atualizada)
+
+  if (resultado.ok) {
+    addLog('enviado', `Agendada enviada: ${item.nome || resultado.numero}`, resultado.numero)
+    return { ok: true, item: atualizada[idxAtual] }
+  }
+
+  addLog('erro', `Erro em agendada ${item.nome || item.telefone}: ${resultado.motivo}`, item.telefone)
+  return { ok: false, motivo: resultado.motivo, item: atualizada[idxAtual] }
+}
+
+function marcarAgendadasPerdidasAoAbrir() {
+  const estado = lerJSON('agendadas_state', {})
+  const lastSeenTs = Date.parse(String(estado.lastSeenAt || ''))
+  const now = Date.now()
+  const lista = obterAgendadas()
+  let mudou = false
+
+  for (const item of lista) {
+    if (item.status !== 'pendente') continue
+    const ts = Date.parse(String(item.scheduledAt || ''))
+    if (!Number.isFinite(ts)) {
+      item.status = 'erro'
+      item.lastError = 'Data ou horario invalido no agendamento.'
+      item.errorAt = new Date().toISOString()
+      mudou = true
+      continue
+    }
+    if (ts <= now && (!Number.isFinite(lastSeenTs) || lastSeenTs < ts)) {
+      item.status = 'erro'
+      item.lastError = 'O app estava fechado no horario agendado. Use "Enviar mensagem" para tentar agora.'
+      item.errorAt = new Date().toISOString()
+      mudou = true
+    }
+  }
+
+  if (mudou) {
+    salvarAgendadas(lista)
+    emitirAgendadasAtualizadas(lista)
+  }
+}
+
+async function processarAgendadas() {
+  if (scheduleProcessing) return
+  scheduleProcessing = true
+
+  try {
+    const now = Date.now()
+    let lista = obterAgendadas()
+    const idsParaEnviar = []
+    let mudou = false
+
+    for (const item of lista) {
+      if (item.status !== 'pendente') continue
+      const ts = Date.parse(String(item.scheduledAt || ''))
+      if (!Number.isFinite(ts)) {
+        item.status = 'erro'
+        item.lastError = 'Data ou horario invalido no agendamento.'
+        item.errorAt = new Date().toISOString()
+        mudou = true
+        continue
+      }
+      if (ts > now) continue
+
+      if (!wClient || wStatus !== 'conectado') {
+        item.status = 'erro'
+        item.lastError = 'WhatsApp nao estava conectado no horario agendado.'
+        item.errorAt = new Date().toISOString()
+        mudou = true
+        continue
+      }
+
+      idsParaEnviar.push(item.id)
+    }
+
+    if (mudou) {
+      salvarAgendadas(lista)
+      emitirAgendadasAtualizadas(lista)
+    }
+
+    salvarJSON('agendadas_state', { lastSeenAt: new Date().toISOString() })
+
+    for (const id of idsParaEnviar) {
+      await enviarAgendadaPorId(id, false)
+    }
+  } finally {
+    scheduleProcessing = false
+  }
+}
+
+function iniciarAgendador() {
+  if (scheduleTimer) clearInterval(scheduleTimer)
+  marcarAgendadasPerdidasAoAbrir()
+  processarAgendadas()
+  scheduleTimer = setInterval(processarAgendadas, SCHEDULE_TICK_MS)
+}
+
 async function iniciarDisparo(campanha) {
   if (!wClient || wStatus !== 'conectado') {
     emit('zd:disparo_erro', { erro: 'WhatsApp nao conectado.' })
@@ -1075,7 +1372,11 @@ ipcMain.handle('wpp:iniciar',       async () => iniciarWpp())
 ipcMain.handle('wpp:desconectar',   async () => { await desconectarWpp(true); return { ok: true } })
 ipcMain.handle('wpp:limpar',        async () => { await limparSessao(); return { ok: true } })
 ipcMain.handle('wpp:status',        async () => ({ status: wStatus, info: wInfo }))
-ipcMain.handle('app:update-check',  async () => verificarAtualizacaoApp())
+ipcMain.handle('app:update-check',  async () => {
+  const updateCheck = await verificarAtualizacaoApp()
+  registrarResultadoUpdate(updateCheck)
+  return updateCheck
+})
 ipcMain.handle('app:update-weekly-status', async () => {
   const estado = lerEstadoUpdate()
   return {
@@ -1083,7 +1384,9 @@ ipcMain.handle('app:update-weekly-status', async () => {
     weeklyEnabled: estado.weeklyEnabled,
     lastCheckAt: estado.lastCheckAt || '',
     nextCheckAt: calcularProximoCheck(estado.lastCheckAt),
-    lastResult: estado.lastResult || null
+    lastResult: estado.lastResult || null,
+    pendingUpdateVersion: estado.pendingUpdateVersion || '',
+    pendingUpdateDetectedAt: estado.pendingUpdateDetectedAt || ''
   }
 })
 ipcMain.handle('app:update-weekly-set-enabled', async (e, enabled) => {
@@ -1092,7 +1395,9 @@ ipcMain.handle('app:update-weekly-set-enabled', async (e, enabled) => {
     ok: true,
     weeklyEnabled: estado.weeklyEnabled,
     lastCheckAt: estado.lastCheckAt || '',
-    nextCheckAt: calcularProximoCheck(estado.lastCheckAt)
+    nextCheckAt: calcularProximoCheck(estado.lastCheckAt),
+    pendingUpdateVersion: estado.pendingUpdateVersion || '',
+    pendingUpdateDetectedAt: estado.pendingUpdateDetectedAt || ''
   }
 })
 ipcMain.handle('app:update-weekly-run', async (e, payload) => {
@@ -1100,6 +1405,7 @@ ipcMain.handle('app:update-weekly-run', async (e, payload) => {
   return executarRotinaSemanalUpdate(force)
 })
 ipcMain.handle('app:engine-status', async () => obterStatusMotores())
+ipcMain.handle('app:update-pending-notice', async () => obterAvisoUpdatePendente())
 ipcMain.handle('app:update-download-install', async (e, payload) => {
   try {
     const url = String(payload?.downloadUrl || '').trim()
@@ -1143,6 +1449,7 @@ ipcMain.handle('app:update-download-install', async (e, payload) => {
         const child = spawn(targetPath, [], { detached: true, stdio: 'ignore', windowsHide: false })
         child.unref()
       } catch (e) {}
+      salvarEstadoUpdate({ pendingUpdateVersion: '', pendingUpdateDetectedAt: '' })
       setTimeout(() => app.quit(), 800)
     }, 250)
 
@@ -1158,6 +1465,12 @@ ipcMain.handle('disparo:pausar',    async () => { pausado = true;  addLog('siste
 ipcMain.handle('disparo:retomar',   async () => { pausado = false; addLog('sistema','Retomado.'); return { ok: true } })
 ipcMain.handle('disparo:parar',     async () => { disparando = false; pausado = false; addLog('sistema','Disparo interrompido.'); return { ok: true } })
 ipcMain.handle('disparo:status',    async () => ({ disparando, pausado }))
+
+ipcMain.handle('agendadas:listar', async () => ({ ok: true, itens: obterAgendadas(), resumo: resumirAgendadas() }))
+ipcMain.handle('agendadas:criar', async (e, payload) => criarAgendada(payload))
+ipcMain.handle('agendadas:remover', async (e, id) => removerAgendada(id))
+ipcMain.handle('agendadas:enviar-agora', async (e, id) => enviarAgendadaPorId(id, true))
+ipcMain.handle('agendadas:processar', async () => { await processarAgendadas(); return { ok: true, resumo: resumirAgendadas() } })
 
 ipcMain.handle('dados:ler',    async (e, nome)        => lerJSON(nome, []))
 ipcMain.handle('dados:salvar', async (e, nome, dados) => { salvarJSON(nome, dados); return { ok: true } })
@@ -1214,7 +1527,10 @@ ipcMain.handle('hist:limpar',      async ()        => { salvarJSON('historico', 
 ipcMain.handle('wpp:logs',         async ()        => logMsgs)
 
 // â”€â”€ CICLO DE VIDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow()
+  iniciarAgendador()
+})
 app.on('window-all-closed', async () => {
   pararTimers()
   await desconectarWpp(true)
