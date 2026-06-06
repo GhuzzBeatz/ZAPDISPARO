@@ -405,6 +405,7 @@ let authFinalizeTimer = null
 let wStarting = false
 let scheduleTimer = null
 let scheduleProcessing = false
+let wRecovering = null
 const SESSION_CLIENT_ID = 'zapdisparo-ghz'
 
 function emit(canal, dados) {
@@ -540,13 +541,16 @@ function createWindow() {
   win.once('ready-to-show', () => { win.show(); win.focus() })
   setTimeout(() => { if (win && !win.isVisible()) win.show() }, 4000)
   win.on('page-title-updated', e => e.preventDefault())
-  win.on('closed', () => { pararTimers(); win = null })
+  win.on('closed', () => { pararTimers(); pararAgendador(); win = null })
 }
 
 function pararTimers() {
   if (initTimer) { clearTimeout(initTimer); initTimer = null }
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   if (authFinalizeTimer) { clearTimeout(authFinalizeTimer); authFinalizeTimer = null }
+}
+
+function pararAgendador() {
   if (scheduleTimer) { clearInterval(scheduleTimer); scheduleTimer = null }
 }
 
@@ -912,6 +916,14 @@ function traduzirErroEnvio(msg) {
   const original = String(msg || '').trim()
   const m = original.toLowerCase()
   if (!original) return 'Falha no envio.'
+  if (
+    m.includes('detached frame') ||
+    m.includes('frame was detached') ||
+    m.includes('execution context was destroyed') ||
+    m.includes('cannot find context with specified id')
+  ) {
+    return 'WhatsApp Web recarregou no momento do envio. O app tentou novamente; se continuar, reconecte o WhatsApp e clique em "Enviar mensagem".'
+  }
   if (m.includes('no lid for user')) {
     return 'Numero sem identificador LID no WhatsApp Web. Confira DDI/DDD e tente novamente.'
   }
@@ -928,6 +940,72 @@ function traduzirErroEnvio(msg) {
     return 'WhatsApp desconectado no momento do envio.'
   }
   return original
+}
+
+function erroTransitorioEnvio(msg) {
+  const m = String(msg || '').toLowerCase()
+  return (
+    m.includes('detached frame') ||
+    m.includes('frame was detached') ||
+    m.includes('execution context was destroyed') ||
+    m.includes('cannot find context with specified id') ||
+    m.includes('whatsapp web recarregou') ||
+    m.includes('sessao do whatsapp caiu') ||
+    m.includes('target closed') ||
+    m.includes('session closed') ||
+    m.includes('protocol error')
+  )
+}
+
+async function aguardarWhatsAppConectado(timeoutMs = 60000) {
+  const inicio = Date.now()
+  while ((Date.now() - inicio) < timeoutMs) {
+    if (wClient && wStatus === 'conectado') return true
+    await sleep(750)
+  }
+  return !!(wClient && wStatus === 'conectado')
+}
+
+async function recuperarMotorEnvioWhatsApp(tag = 'envio') {
+  if (wRecovering) return wRecovering
+
+  wRecovering = (async () => {
+    addLog('aviso', `WhatsApp Web ficou instavel (${tag}). Recuperando motor antes de reenviar...`)
+
+    try {
+      if (wClient?.pupPage && typeof wClient.pupPage.isClosed === 'function' && !wClient.pupPage.isClosed()) {
+        await wClient.pupPage.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
+        await sleep(6000)
+        try {
+          const state = await wClient.getState()
+          if (state === 'CONNECTED') {
+            wInfo = { numero: wClient.info?.wid?.user || wInfo.numero || '', nome: wClient.info?.pushname || wInfo.nome || '' }
+            emitStatus('conectado', wInfo)
+            addLog('sistema', 'WhatsApp Web recuperado apos recarregar a pagina.')
+            return true
+          }
+        } catch (e) {}
+      }
+    } catch (err) {
+      addLog('aviso', `Recarregamento do WhatsApp Web nao resolveu: ${traduzirErroEnvio(err.message || String(err))}`)
+    }
+
+    try {
+      await iniciarWpp(true)
+      const ok = await aguardarWhatsAppConectado(60000)
+      if (ok) addLog('sistema', 'WhatsApp reconectado automaticamente para continuar o envio.')
+      return ok
+    } catch (err) {
+      addLog('erro', `Falha ao recuperar WhatsApp automaticamente: ${traduzirErroEnvio(err.message || String(err))}`)
+      return false
+    }
+  })()
+
+  try {
+    return await wRecovering
+  } finally {
+    wRecovering = null
+  }
 }
 
 async function resolverChatIdContato(valorTelefone) {
@@ -1000,10 +1078,6 @@ async function resolverChatIdContato(valorTelefone) {
 }
 
 async function enviarMensagemDireta(payload) {
-  if (!wClient || wStatus !== 'conectado') {
-    return { ok: false, motivo: 'WhatsApp nao conectado. Conecte o WhatsApp e tente novamente.' }
-  }
-
   const telefone = limparTelefone(payload?.telefone || payload?.numero || '')
   const mensagem = String(payload?.mensagem || '').trim()
   if (!telefone || telefone.length < 8) {
@@ -1013,31 +1087,140 @@ async function enviarMensagemDireta(payload) {
     return { ok: false, motivo: 'Mensagem vazia.' }
   }
 
-  const resolucao = await resolverChatIdContato(telefone)
-  if (!resolucao.ok) {
-    return { ok: false, motivo: resolucao.motivo, numero: telefone }
+  const tentativas = Math.max(1, Number(payload?.tentativas || 3))
+  let ultimoMotivo = ''
+  let ultimoNumero = telefone
+
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    if (!wClient || wStatus !== 'conectado') {
+      return { ok: false, motivo: 'WhatsApp nao conectado. Conecte o WhatsApp e tente novamente.', numero: telefone }
+    }
+
+    try {
+      if (wClient.pupPage && typeof wClient.pupPage.isClosed === 'function' && wClient.pupPage.isClosed()) {
+        return { ok: false, motivo: 'WhatsApp Web foi fechado internamente. Reconecte o WhatsApp e tente novamente.', numero: telefone }
+      }
+    } catch (e) {}
+
+    const resolucao = await resolverChatIdContato(telefone)
+    if (!resolucao.ok) {
+      ultimoMotivo = resolucao.motivo
+      if (erroTransitorioEnvio(ultimoMotivo) && tentativa < tentativas) {
+        addLog('aviso', `WhatsApp Web instavel. Tentando novamente (${tentativa + 1}/${tentativas})...`, telefone)
+        await recuperarMotorEnvioWhatsApp('resolver contato')
+        await sleep(2500)
+        continue
+      }
+      return { ok: false, motivo: ultimoMotivo, numero: telefone }
+    }
+
+    try {
+      const contato = {
+        telefone,
+        numero: telefone,
+        nome: String(payload?.nome || '').trim(),
+        empresa: String(payload?.empresa || '').trim()
+      }
+      const texto = aplicarVariaveis(mensagem, contato)
+      await wClient.sendMessage(resolucao.chatId, texto)
+      return {
+        ok: true,
+        numero: resolucao.numeroCanonico || telefone,
+        chatId: resolucao.chatId
+      }
+    } catch (err) {
+      const erroOriginal = err.message || String(err)
+      ultimoMotivo = traduzirErroEnvio(erroOriginal)
+      ultimoNumero = resolucao.numeroCanonico || telefone
+
+      if (erroTransitorioEnvio(erroOriginal) && tentativa < tentativas) {
+        addLog('aviso', `WhatsApp Web recarregou durante o envio. Tentando novamente (${tentativa + 1}/${tentativas})...`, ultimoNumero)
+        await recuperarMotorEnvioWhatsApp('enviar mensagem')
+        await sleep(3000)
+        continue
+      }
+
+      return {
+        ok: false,
+        numero: ultimoNumero,
+        motivo: ultimoMotivo
+      }
+    }
   }
 
-  try {
-    const contato = {
-      telefone,
-      numero: telefone,
-      nome: String(payload?.nome || '').trim(),
-      empresa: String(payload?.empresa || '').trim()
+  return {
+    ok: false,
+    numero: ultimoNumero,
+    motivo: ultimoMotivo || 'Falha no envio apos novas tentativas.'
+  }
+}
+
+async function enviarContatoCampanhaComRetry({ contato, tel, mensagem, mediaParaEnvio, cacheChatId, tentativas = 3 }) {
+  let ultimoMotivo = ''
+  let ultimoNumero = tel
+
+  for (let tentativa = 1; tentativa <= tentativas; tentativa++) {
+    if (!wClient || wStatus !== 'conectado') {
+      return { ok: false, numero: tel, motivo: 'WhatsApp nao conectado.' }
     }
-    const texto = aplicarVariaveis(mensagem, contato)
-    await wClient.sendMessage(resolucao.chatId, texto)
-    return {
-      ok: true,
-      numero: resolucao.numeroCanonico || telefone,
-      chatId: resolucao.chatId
+
+    try {
+      if (wClient.pupPage && typeof wClient.pupPage.isClosed === 'function' && wClient.pupPage.isClosed()) {
+        return { ok: false, numero: tel, motivo: 'WhatsApp Web foi fechado internamente. Reconecte o WhatsApp e tente novamente.' }
+      }
+    } catch (e) {}
+
+    let resolucao = cacheChatId.get(tel)
+    if (!resolucao || tentativa > 1) {
+      resolucao = await resolverChatIdContato(tel)
+      cacheChatId.set(tel, resolucao)
     }
-  } catch (err) {
-    return {
-      ok: false,
-      numero: resolucao.numeroCanonico || telefone,
-      motivo: traduzirErroEnvio(err.message || String(err))
+
+    if (!resolucao.ok) {
+      ultimoMotivo = resolucao.motivo
+      cacheChatId.delete(tel)
+      if (erroTransitorioEnvio(ultimoMotivo) && tentativa < tentativas) {
+        addLog('aviso', `WhatsApp Web instavel. Tentando resolver novamente (${tentativa + 1}/${tentativas})...`, tel)
+        await recuperarMotorEnvioWhatsApp('resolver contato do disparo')
+        await sleep(2500)
+        continue
+      }
+      return { ok: false, numero: tel, motivo: ultimoMotivo }
     }
+
+    const chatId = resolucao.chatId
+    ultimoNumero = resolucao.numeroCanonico || tel
+
+    try {
+      if (!resolucao.confirmado) {
+        addLog('aviso', `Numero sem confirmacao previa. Tentando envio direto: ${ultimoNumero}`, ultimoNumero)
+      }
+      if (mediaParaEnvio) {
+        await wClient.sendMessage(chatId, mediaParaEnvio, { caption: mensagem })
+      } else {
+        await wClient.sendMessage(chatId, mensagem)
+      }
+      return { ok: true, numero: ultimoNumero, chatId }
+    } catch (err) {
+      const erroOriginal = err.message || String(err)
+      ultimoMotivo = traduzirErroEnvio(erroOriginal)
+      cacheChatId.delete(tel)
+
+      if (erroTransitorioEnvio(erroOriginal) && tentativa < tentativas) {
+        addLog('aviso', `WhatsApp Web recarregou durante o envio. Tentando novamente (${tentativa + 1}/${tentativas})...`, ultimoNumero)
+        await recuperarMotorEnvioWhatsApp('enviar contato do disparo')
+        await sleep(3000)
+        continue
+      }
+
+      return { ok: false, numero: ultimoNumero, motivo: ultimoMotivo }
+    }
+  }
+
+  return {
+    ok: false,
+    numero: ultimoNumero,
+    motivo: ultimoMotivo || 'Falha no envio apos novas tentativas.'
   }
 }
 
@@ -1300,45 +1483,30 @@ async function iniciarDisparo(campanha) {
       continue
     }
 
-    let resolucao = cacheChatId.get(tel)
-    if (!resolucao) {
-      resolucao = await resolverChatIdContato(tel)
-      cacheChatId.set(tel, resolucao)
-    }
-    if (!resolucao.ok) {
-      erros++
-      emit('zd:disparo_progresso', {
-        i: i+1, total: contatos.length, enviados, erros, pulados,
-        status: 'erro', contato: c.nome || tel, numero: tel, motivo: resolucao.motivo
-      })
-      addLog('erro', `Nao foi possivel resolver numero ${c.nome || tel}: ${resolucao.motivo}`, tel)
-      continue
-    }
-
-    const chatId  = resolucao.chatId
-    const numeroAlvo = resolucao.numeroCanonico || tel
     const mensagem = aplicarVariaveis(campanha.mensagem, c)
+    const resultadoEnvio = await enviarContatoCampanhaComRetry({
+      contato: c,
+      tel,
+      mensagem,
+      mediaParaEnvio,
+      cacheChatId,
+      tentativas: 3
+    })
 
-    try {
-      if (!resolucao.confirmado) {
-        addLog('aviso', `Numero sem confirmacao previa. Tentando envio direto: ${numeroAlvo}`, numeroAlvo)
-      }
-      if (mediaParaEnvio) {
-        await wClient.sendMessage(chatId, mediaParaEnvio, { caption: mensagem })
-      } else {
-        await wClient.sendMessage(chatId, mensagem)
-      }
+    if (resultadoEnvio.ok) {
       enviados++
-      emit('zd:disparo_progresso', { i: i+1, total: contatos.length, enviados, erros, pulados, status: 'enviado', contato: c.nome||numeroAlvo, numero: numeroAlvo })
-      addLog('enviado', `Enviado: ${c.nome || numeroAlvo}`, numeroAlvo)
-    } catch(err) {
-      const motivo = traduzirErroEnvio(err.message || String(err))
+      emit('zd:disparo_progresso', {
+        i: i+1, total: contatos.length, enviados, erros, pulados,
+        status: 'enviado', contato: c.nome || resultadoEnvio.numero, numero: resultadoEnvio.numero
+      })
+      addLog('enviado', `Enviado: ${c.nome || resultadoEnvio.numero}`, resultadoEnvio.numero)
+    } else {
       erros++
       emit('zd:disparo_progresso', {
         i: i+1, total: contatos.length, enviados, erros, pulados,
-        status: 'erro', contato: c.nome||numeroAlvo, numero: numeroAlvo, motivo
+        status: 'erro', contato: c.nome || resultadoEnvio.numero, numero: resultadoEnvio.numero, motivo: resultadoEnvio.motivo
       })
-      addLog('erro', `Erro ao enviar para ${c.nome || numeroAlvo}: ${motivo}`, numeroAlvo)
+      addLog('erro', `Erro ao enviar para ${c.nome || resultadoEnvio.numero}: ${resultadoEnvio.motivo}`, resultadoEnvio.numero)
     }
 
     // Delay entre mensagens (nÃ£o na Ãºltima)
@@ -1533,6 +1701,7 @@ app.whenReady().then(() => {
 })
 app.on('window-all-closed', async () => {
   pararTimers()
+  pararAgendador()
   await desconectarWpp(true)
   if (process.platform !== 'darwin') app.quit()
 })
