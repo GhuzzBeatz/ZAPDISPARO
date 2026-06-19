@@ -1694,6 +1694,10 @@ ipcMain.handle('hist:ler',         async ()        => lerJSON('historico', []))
 ipcMain.handle('hist:limpar',      async ()        => { salvarJSON('historico', []); return { ok: true } })
 ipcMain.handle('wpp:logs',         async ()        => logMsgs)
 
+// ── LICENÇA SUPABASE ─────────────────────────────────────
+const setupLicense = require('./ghz-license-only')
+setupLicense({ app, ipcMain, getDataDir })
+
 // â”€â”€ CICLO DE VIDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.whenReady().then(() => {
   createWindow()

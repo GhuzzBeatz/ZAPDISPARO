@@ -6,7 +6,7 @@
   <link rel="stylesheet" href="css/style.css">
   <script src="js/licenca.js"></script>
   <script>
-    if (!licencaAtivaZD()) window.location.replace('pages/licenca.html')
+    if (!window.ghzLicense || !window.ghzLicense.cacheActive()) window.location.replace('pages/licenca.html')
   </script>
 </head>
 <body>

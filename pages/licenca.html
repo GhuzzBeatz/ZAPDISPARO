@@ -6,34 +6,75 @@
 <div class="lic-body">
   <div class="lic-box">
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:28px">
-      <div style="width:54px;height:54px;background:linear-gradient(135deg,#25d366,#128c4a);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 6px 20px rgba(37,211,102,.4)">🚀</div>
+      <div style="width:54px;height:54px;background:linear-gradient(135deg,#25d366,#128c4a);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 6px 20px rgba(37,211,102,.4)">📱</div>
       <div>
         <div style="font-size:26px;font-weight:900;color:var(--fg)">Zap<span style="color:#25d366">Disparo</span></div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px">Disparador de Mensagens em Massa para WhatsApp</div>
       </div>
     </div>
-    <div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px">Chave de Licença</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Formato: <span style="font-family:monospace;color:var(--primary);font-weight:700">ZAPDISP-0000-XXXX-0000</span></div>
-    <input class="lic-input" id="inputChave" maxlength="30" placeholder="ZAPDISP-XXXX-XXXX-XXXX" oninput="fmt(this)" onkeydown="if(event.key==='Enter')ativar()">
-    <button class="lic-btn" onclick="ativar()">🔑 Ativar Licença</button>
-    <div style="background:var(--rbg);border:1px solid rgba(240,82,82,.25);color:var(--red);border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;margin-top:12px;display:none" id="erro">Chave inválida. Verifique e tente novamente.</div>
-    <div style="text-align:center;margin-top:22px;font-size:11px;color:var(--muted)">Suporte: (11) 94898-1459 · GHZPLUGIN@GMAIL.COM</div>
+    <div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px">Chave de Licen&ccedil;a</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Formato: <span style="font-family:monospace;color:var(--primary);font-weight:700">ZAPDS-XXXX-XXXX-XXXX-XXXX</span></div>
+    <input class="lic-input" id="inputChave" maxlength="24" placeholder="ZAPDS-XXXX-XXXX-XXXX-XXXX" oninput="fmt(this)" onkeydown="if(event.key==='Enter')document.getElementById('inputPhone').focus()">
+
+    <div style="font-size:14px;font-weight:700;color:var(--fg);margin-bottom:6px;margin-top:14px">WhatsApp (opcional)</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Seu n&uacute;mero para suporte e identifica&ccedil;&atilde;o</div>
+    <input class="lic-input" id="inputPhone" maxlength="20" placeholder="11999999999" onkeydown="if(event.key==='Enter')ativar()">
+
+    <button class="lic-btn" id="btnAtivar" onclick="ativar()">&#128273; Ativar Licen&ccedil;a</button>
+    <div style="background:var(--rbg);border:1px solid rgba(240,82,82,.25);color:var(--red);border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;margin-top:12px;display:none" id="erro"></div>
+    <div style="background:rgba(37,211,102,.08);border:1px solid rgba(37,211,102,.25);color:#25d366;border-radius:8px;padding:9px 13px;font-size:13px;font-weight:600;margin-top:12px;display:none" id="sucesso"></div>
+    <div style="text-align:center;margin-top:22px;font-size:11px;color:var(--muted)">Suporte: (11) 94898-1459 &middot; GHZPLUGIN@GMAIL.COM</div>
   </div>
 </div>
 <script>
 aplicarTemaAtual()
 function fmt(inp){
   let v=inp.value.toUpperCase().replace(/[^A-Z0-9]/g,''),r=''
-  if(v.length<=7) r=v
-  else if(v.length<=11) r=v.slice(0,7)+'-'+v.slice(7)
-  else if(v.length<=15) r=v.slice(0,7)+'-'+v.slice(7,11)+'-'+v.slice(11)
-  else r=v.slice(0,7)+'-'+v.slice(7,11)+'-'+v.slice(11,15)+'-'+v.slice(15,19)
+  if(v.length<=5) r=v
+  else if(v.length<=9) r=v.slice(0,5)+'-'+v.slice(5)
+  else if(v.length<=13) r=v.slice(0,5)+'-'+v.slice(5,9)+'-'+v.slice(9)
+  else if(v.length<=17) r=v.slice(0,5)+'-'+v.slice(5,9)+'-'+v.slice(9,13)+'-'+v.slice(13)
+  else r=v.slice(0,5)+'-'+v.slice(5,9)+'-'+v.slice(9,13)+'-'+v.slice(13,17)+'-'+v.slice(17,21)
   inp.value=r
 }
-function ativar(){
+async function ativar(){
   const chave=document.getElementById('inputChave').value.trim()
-  if(validarChaveZD(chave)){salvarLicencaZD(chave);window.location.replace('../index.html')}
-  else{document.getElementById('erro').style.display='block';setTimeout(()=>document.getElementById('erro').style.display='none',4000)}
+  const phone=document.getElementById('inputPhone').value.trim()
+  const btn=document.getElementById('btnAtivar')
+  const erro=document.getElementById('erro')
+  const sucesso=document.getElementById('sucesso')
+  if(!chave){erro.textContent='Informe a chave de licença.';erro.style.display='block';setTimeout(()=>erro.style.display='none',4000);return}
+  btn.disabled=true;btn.textContent='Validando...'
+  erro.style.display='none';sucesso.style.display='none'
+  try{
+    const r=await window.ghzLicense.activateOnline(chave,phone)
+    if(r&&r.ok){
+      sucesso.textContent='Licença ativada com sucesso! Entrando...'
+      sucesso.style.display='block'
+      window.ghzLicense.markSession()
+      setTimeout(()=>window.location.replace('../index.html'),1200)
+    } else {
+      erro.textContent=r?.message||'Chave inválida ou sem permissão.'
+      erro.style.display='block'
+      setTimeout(()=>erro.style.display='none',6000)
+    }
+  }catch(e){
+    erro.textContent='Erro de conexão. Verifique sua internet.'
+    erro.style.display='block'
+    setTimeout(()=>erro.style.display='none',5000)
+  }finally{
+    btn.disabled=false;btn.textContent='\u{1F511} Ativar Licença'
+  }
 }
+// Auto-validate if cache exists but session expired
+;(async function(){
+  if(window.ghzLicense.cacheActive()&&!window.ghzLicense.sessionValid()){
+    try{
+      const r=await window.ghzLicense.validateOnline()
+      if(r&&r.ok){window.ghzLicense.markSession();window.location.replace('../index.html');return}
+    }catch(e){}
+  }
+  if(window.ghzLicense.sessionValid()){window.location.replace('../index.html')}
+})()
 </script>
 </body></html>
