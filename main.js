@@ -1535,6 +1535,133 @@ async function iniciarDisparo(campanha) {
   addLog('sistema', `Disparo concluido. Enviados: ${enviados} | Erros: ${erros} | Pulados: ${pulados}`)
 }
 
+async function iniciarDisparoGrupos(campanha) {
+  if (!wClient || wStatus !== 'conectado') {
+    emit('zd:disparo_erro', { erro: 'WhatsApp nao conectado.' })
+    return
+  }
+  disparando = true
+  pausado    = false
+  const grupos    = campanha.grupos
+  const delayMin  = Number(campanha.delayMin || 10)
+  const delayMax  = Number(campanha.delayMax || 25)
+  let enviados = 0, erros = 0
+  let mediaParaEnvio = null
+
+  emit('zd:disparo_inicio', { total: grupos.length })
+  addLog('sistema', `Disparo em grupos iniciado - ${grupos.length} grupo(s).`)
+
+  if (campanha.imagemBase64 || campanha.imagemPath) {
+    try {
+      const { MessageMedia } = require('whatsapp-web.js')
+      const nomeArquivo = String(campanha.imagemNome || '').trim() || 'imagem.jpg'
+      const caminhoImagem = String(campanha.imagemPath || '').trim()
+
+      if (caminhoImagem && fs.existsSync(caminhoImagem)) {
+        mediaParaEnvio = MessageMedia.fromFilePath(caminhoImagem)
+      } else {
+        const base64 = String(campanha.imagemBase64).includes(',')
+          ? String(campanha.imagemBase64).split(',')[1]
+          : String(campanha.imagemBase64)
+        const mime = String(campanha.imagemMime || '').trim() || 'image/jpeg'
+        mediaParaEnvio = new MessageMedia(mime, base64, nomeArquivo)
+      }
+
+      addLog('sistema', `Anexo de imagem pronto: ${nomeArquivo}`)
+    } catch (err) {
+      emit('zd:disparo_erro', { erro: `Falha ao preparar imagem anexada: ${err.message}` })
+      addLog('erro', `Falha ao preparar imagem anexada: ${err.message}`)
+      disparando = false
+      return
+    }
+  }
+
+  for (let i = 0; i < grupos.length; i++) {
+    while (pausado && disparando) await sleep(500)
+    if (!disparando) break
+
+    const g = grupos[i]
+    const chatId = g.id
+    const nome = g.nome || 'Grupo'
+
+    if (!chatId) {
+      erros++
+      emit('zd:disparo_progresso', { i: i+1, total: grupos.length, enviados, erros, pulados: 0, status: 'erro', contato: nome, numero: '', motivo: 'ID do grupo invalido' })
+      addLog('erro', `ID invalido para grupo: ${nome}`)
+      continue
+    }
+
+    const mensagem = campanha.mensagem
+
+    const MAX_TENTATIVAS = 3
+    let enviou = false
+    let ultimoMotivo = ''
+
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS; tentativa++) {
+      if (!wClient || wStatus !== 'conectado') {
+        ultimoMotivo = 'WhatsApp nao conectado.'
+        break
+      }
+
+      try {
+        if (mediaParaEnvio) {
+          await wClient.sendMessage(chatId, mediaParaEnvio, { caption: mensagem })
+        } else {
+          await wClient.sendMessage(chatId, mensagem)
+        }
+        enviou = true
+        break
+      } catch (err) {
+        ultimoMotivo = traduzirErroEnvio(err.message || String(err))
+        if (erroTransitorioEnvio(err.message || String(err)) && tentativa < MAX_TENTATIVAS) {
+          addLog('aviso', `Erro transitorio no grupo ${nome}. Tentando novamente (${tentativa + 1}/${MAX_TENTATIVAS})...`)
+          await recuperarMotorEnvioWhatsApp('enviar grupo')
+          await sleep(3000)
+          continue
+        }
+      }
+    }
+
+    if (enviou) {
+      enviados++
+      emit('zd:disparo_progresso', {
+        i: i+1, total: grupos.length, enviados, erros, pulados: 0,
+        status: 'enviado', contato: nome, numero: chatId
+      })
+      addLog('enviado', `Enviado para grupo: ${nome}`, chatId)
+    } else {
+      erros++
+      emit('zd:disparo_progresso', {
+        i: i+1, total: grupos.length, enviados, erros, pulados: 0,
+        status: 'erro', contato: nome, numero: chatId, motivo: ultimoMotivo
+      })
+      addLog('erro', `Erro ao enviar para grupo ${nome}: ${ultimoMotivo}`, chatId)
+    }
+
+    if (i < grupos.length - 1 && disparando && !pausado) {
+      const delayAleatorio = Math.floor(Math.random() * (delayMax - delayMin + 1) + delayMin) * 1000
+      emit('zd:aguardando', { delay: Math.round(delayAleatorio/1000), proximo: i+2 })
+      await sleep(delayAleatorio)
+    }
+  }
+
+  disparando = false
+  const resultado = { enviados, erros, pulados: 0, total: grupos.length }
+
+  const hist = lerJSON('historico', [])
+  hist.unshift({
+    id:        Date.now(),
+    nome:      campanha.nome || 'Disparo em Grupos',
+    data:      new Date().toLocaleDateString('pt-BR'),
+    hora:      new Date().toLocaleTimeString('pt-BR'),
+    ...resultado
+  })
+  salvarJSON('historico', hist.slice(0, 100))
+
+  emit('zd:disparo_fim', resultado)
+  addLog('sistema', `Disparo em grupos concluido. Enviados: ${enviados} | Erros: ${erros}`)
+}
+
 // â”€â”€ IPC â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ipcMain.handle('wpp:iniciar',       async () => iniciarWpp())
 ipcMain.handle('wpp:desconectar',   async () => { await desconectarWpp(true); return { ok: true } })
@@ -1629,6 +1756,7 @@ ipcMain.handle('app:update-download-install', async (e, payload) => {
 })
 
 ipcMain.handle('disparo:iniciar',   async (e, campanha) => { iniciarDisparo(campanha); return { ok: true } })
+ipcMain.handle('disparo:iniciarGrupos', async (e, campanha) => { iniciarDisparoGrupos(campanha); return { ok: true } })
 ipcMain.handle('disparo:pausar',    async () => { pausado = true;  addLog('sistema','Pausado.'); return { ok: true } })
 ipcMain.handle('disparo:retomar',   async () => { pausado = false; addLog('sistema','Retomado.'); return { ok: true } })
 ipcMain.handle('disparo:parar',     async () => { disparando = false; pausado = false; addLog('sistema','Disparo interrompido.'); return { ok: true } })
@@ -1690,6 +1818,22 @@ ipcMain.handle('listas:ler',       async ()        => lerJSON('listas', []))
 ipcMain.handle('listas:salvar',    async (e, d)    => { salvarJSON('listas', d); return { ok: true } })
 ipcMain.handle('templates:ler',    async ()        => lerJSON('templates', []))
 ipcMain.handle('templates:salvar', async (e, d)    => { salvarJSON('templates', d); return { ok: true } })
+ipcMain.handle('wpp:listarGrupos', async () => {
+  if (!wClient || wStatus !== 'conectado') return { ok: false, motivo: 'WhatsApp nao conectado.' }
+  try {
+    const chats = await wClient.getChats()
+    const grupos = chats
+      .filter(c => c.isGroup)
+      .map(c => ({
+        id: c.id._serialized || c.id,
+        nome: c.name || 'Grupo sem nome',
+        participantes: c.participants ? c.participants.length : 0
+      }))
+    return { ok: true, grupos }
+  } catch (err) {
+    return { ok: false, motivo: err.message || String(err) }
+  }
+})
 ipcMain.handle('hist:ler',         async ()        => lerJSON('historico', []))
 ipcMain.handle('hist:limpar',      async ()        => { salvarJSON('historico', []); return { ok: true } })
 ipcMain.handle('wpp:logs',         async ()        => logMsgs)
