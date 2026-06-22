@@ -166,4 +166,20 @@ module.exports = function setup(config) {
       return cacheValid(s) ? { ok: true, cached: true } : { ok: false, reason: 'offline_expired' }
     }
   })
+
+  ipcMain.handle('license:go-to-app', async () => {
+    const { BrowserWindow } = require('electron')
+    const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (w) w.loadFile('index.html')
+    return { ok: true }
+  })
+
+  ipcMain.handle('license:go-to-licenca', async () => {
+    const { BrowserWindow } = require('electron')
+    const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (w) w.loadFile('pages/licenca.html')
+    return { ok: true }
+  })
+
+  return { cacheValid, readState, validate }
 }

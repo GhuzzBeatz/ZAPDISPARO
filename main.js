@@ -537,7 +537,8 @@ function createWindow() {
       additionalArguments: ['--data-dir='+dir]
     }
   })
-  win.loadFile('index.html')
+  const startPage = licenseApi.cacheValid() ? 'index.html' : 'pages/licenca.html'
+  win.loadFile(startPage)
   win.once('ready-to-show', () => { win.show(); win.focus() })
   setTimeout(() => { if (win && !win.isVisible()) win.show() }, 4000)
   win.on('page-title-updated', e => e.preventDefault())
@@ -1840,7 +1841,7 @@ ipcMain.handle('wpp:logs',         async ()        => logMsgs)
 
 // ── LICENÇA SUPABASE ─────────────────────────────────────
 const setupLicense = require('./ghz-license-only')
-setupLicense({ app, ipcMain, getDataDir })
+const licenseApi = setupLicense({ app, ipcMain, getDataDir })
 
 // â”€â”€ CICLO DE VIDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app.whenReady().then(() => {

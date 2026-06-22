@@ -52,7 +52,10 @@ async function ativar(){
       sucesso.textContent='Licença ativada com sucesso! Entrando...'
       sucesso.style.display='block'
       window.ghzLicense.markSession()
-      setTimeout(()=>window.location.replace('../index.html'),1200)
+      setTimeout(()=>{
+        const { ipcRenderer } = require('electron')
+        ipcRenderer.invoke('license:go-to-app')
+      },1200)
     } else {
       erro.textContent=r?.message||'Chave inválida ou sem permissão.'
       erro.style.display='block'
@@ -68,13 +71,14 @@ async function ativar(){
 }
 // Auto-validate if cache exists but session expired
 ;(async function(){
+  const { ipcRenderer } = require('electron')
   if(window.ghzLicense.cacheActive()&&!window.ghzLicense.sessionValid()){
     try{
       const r=await window.ghzLicense.validateOnline()
-      if(r&&r.ok){window.ghzLicense.markSession();window.location.replace('../index.html');return}
+      if(r&&r.ok){window.ghzLicense.markSession();ipcRenderer.invoke('license:go-to-app');return}
     }catch(e){}
   }
-  if(window.ghzLicense.sessionValid()){window.location.replace('../index.html')}
+  if(window.ghzLicense.sessionValid()){ipcRenderer.invoke('license:go-to-app')}
 })()
 </script>
 </body></html>
