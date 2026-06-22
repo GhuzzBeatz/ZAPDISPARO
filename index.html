@@ -5,9 +5,6 @@
   <title>ZapDisparo</title>
   <link rel="stylesheet" href="css/style.css">
   <script src="js/licenca.js"></script>
-  <script>
-    if (!window.ghzLicense || !window.ghzLicense.cacheActive()) window.location.replace('pages/licenca.html')
-  </script>
 </head>
 <body>
 <div class="app-titlebar">Zap<span>Disparo</span></div>
@@ -198,5 +195,6 @@ rodarChecagemSemanalSilenciosa()
 checarAvisoUpdatePendente()
 setInterval(checarAvisoUpdatePendente, 60 * 60 * 1000)
 </script>
+<script src="js/ghz-support.js" data-target=".menu-footer" data-accent="#25d366"></script>
 </body>
 </html>

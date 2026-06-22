@@ -50,6 +50,9 @@ function encontrarChrome() {
 
 app.setName('ZapDisparo')
 
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) app.quit()
+
 // â”€â”€ DADOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getDataDir() {
   return app.isPackaged
@@ -393,6 +396,7 @@ let wStatus    = 'desconectado'
 let wQR        = null
 let wInfo      = {}
 let win        = null
+let licenseBackend = null
 let disparando = false
 let pausado    = false
 let initTimer  = null
@@ -404,6 +408,21 @@ let manualStopRequested = false
 let authFinalizeTimer = null
 let wStarting = false
 let scheduleTimer = null
+
+app.on('second-instance', () => {
+  if (!win) return
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+})
+
+function isLicensePageUrl(url) {
+  try { return decodeURIComponent(new URL(url).pathname).replace(/\\/g, '/').endsWith('/pages/licenca.html') } catch (e) { return false }
+}
+
+function loadLicensePage() {
+  if (win && !win.isDestroyed()) win.loadFile('pages/licenca.html').catch(() => {})
+}
 let scheduleProcessing = false
 let wRecovering = null
 const SESSION_CLIENT_ID = 'zapdisparo-ghz'
@@ -534,10 +553,16 @@ function createWindow() {
       nodeIntegrationInSubFrames: true, // OBRIGATÃ“RIO â€” app usa iframes
       contextIsolation: false,
       webSecurity: false,
+      devTools: !app.isPackaged,
       additionalArguments: ['--data-dir='+dir]
     }
   })
-  win.loadFile('index.html')
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!licenseBackend?.isSessionAuthorized() && !isLicensePageUrl(url)) {
+      event.preventDefault()
+      loadLicensePage()
+    }
+  })
   win.once('ready-to-show', () => { win.show(); win.focus() })
   setTimeout(() => { if (win && !win.isVisible()) win.show() }, 4000)
   win.on('page-title-updated', e => e.preventDefault())
@@ -1840,11 +1865,15 @@ ipcMain.handle('wpp:logs',         async ()        => logMsgs)
 
 // ── LICENÇA SUPABASE ─────────────────────────────────────
 const setupLicense = require('./ghz-license-only')
-setupLicense({ app, ipcMain, getDataDir })
+licenseBackend = setupLicense({ app, ipcMain, getDataDir })
 
 // â”€â”€ CICLO DE VIDA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  if (!gotSingleInstanceLock) return
   createWindow()
+  await win.loadFile('pages/licenca.html')
+  const result = await licenseBackend.validateForStartup().catch(() => ({ ok: false }))
+  if (result?.ok && win && !win.isDestroyed()) await win.loadFile('index.html')
   iniciarAgendador()
 })
 app.on('window-all-closed', async () => {
