@@ -71,14 +71,27 @@ module.exports = function setup(config) {
   // ── LICENSE STATE ───────────────────────────────────────
   function statePath() { return path.join(getDataDir(), 'license-state.json') }
 
+  function computeStateHmac(s) {
+    const payload = `${s.active}|${s.license_key}|${s.activated_at}|${s.last_validated_at}`
+    return crypto.createHmac('sha256', 'ghz_license_state_v2').update(payload).digest('hex')
+  }
+
   function readState() {
-    try { return JSON.parse(fs.readFileSync(statePath(), 'utf8') || '{}') } catch (e) { return {} }
+    try {
+      const s = JSON.parse(fs.readFileSync(statePath(), 'utf8') || '{}')
+      if (s.active && s._sig && s._sig !== computeStateHmac(s)) {
+        s.active = false
+        s.last_error = 'Integrity check failed'
+      }
+      return s
+    } catch (e) { return {} }
   }
 
   function saveState(patch = {}) {
     const dir = getDataDir()
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
     const s = { active: false, license_key: '', customer_name: '', activated_at: '', last_validated_at: '', last_error: '', ...readState(), ...patch }
+    s._sig = computeStateHmac(s)
     fs.writeFileSync(statePath(), JSON.stringify(s, null, 2), 'utf8')
     return s
   }
@@ -86,6 +99,7 @@ module.exports = function setup(config) {
   function cacheValid(s) {
     if (!s) s = readState()
     if (!s.active || !s.license_key) return false
+    if (s._sig && s._sig !== computeStateHmac(s)) return false
     const t = Date.parse(s.last_validated_at || s.activated_at || '')
     return Number.isFinite(t) && Date.now() - t <= LICENSE_CACHE_MAX_MS
   }
@@ -118,4 +132,54 @@ module.exports = function setup(config) {
   })
   ipcMain.handle('license:activate', async (e, { license_key, phone }) => activate(license_key, phone))
   ipcMain.handle('license:validate', async () => validate())
+
+  // ── PERIODIC REVALIDATION (every 30 min) ───────────────
+  const REVALIDATE_INTERVAL = 30 * 60 * 1000
+  let revalidateTimer = null
+  function startRevalidation() {
+    if (revalidateTimer) clearInterval(revalidateTimer)
+    revalidateTimer = setInterval(async () => {
+      const s = readState()
+      if (!s.active || !s.license_key) return
+      try {
+        const r = await validate()
+        if (!r?.ok) {
+          const { BrowserWindow } = require('electron')
+          const wins = BrowserWindow.getAllWindows()
+          wins.forEach(w => w.webContents.executeJavaScript(
+            "if(window.ghzLicense)window.ghzLicense.clearCache();window.location.replace('pages/licenca.html')"
+          ))
+        }
+      } catch (e) { /* network error — keep cached state */ }
+    }, REVALIDATE_INTERVAL)
+  }
+  app.whenReady().then(startRevalidation)
+
+  // ── STARTUP GATE: force server validation on app start ──
+  ipcMain.handle('license:startup-check', async () => {
+    const s = readState()
+    if (!s.active || !s.license_key) return { ok: false, reason: 'no_license' }
+    try {
+      const r = await validate()
+      return r?.ok ? { ok: true } : { ok: false, reason: r?.message || 'invalid' }
+    } catch (e) {
+      return cacheValid(s) ? { ok: true, cached: true } : { ok: false, reason: 'offline_expired' }
+    }
+  })
+
+  ipcMain.handle('license:go-to-app', async () => {
+    const { BrowserWindow } = require('electron')
+    const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (w) w.loadFile('index.html')
+    return { ok: true }
+  })
+
+  ipcMain.handle('license:go-to-licenca', async () => {
+    const { BrowserWindow } = require('electron')
+    const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+    if (w) w.loadFile('pages/licenca.html')
+    return { ok: true }
+  })
+
+  return { cacheValid, readState, validate }
 }

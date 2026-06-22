@@ -6,7 +6,19 @@
   <link rel="stylesheet" href="css/style.css">
   <script src="js/licenca.js"></script>
   <script>
-    if (!window.ghzLicense || !window.ghzLicense.cacheActive()) window.location.replace('pages/licenca.html')
+    ;(function(){
+      const { ipcRenderer } = require('electron')
+      if (!window.ghzLicense || !window.ghzLicense.cacheActive()) {
+        ipcRenderer.invoke('license:go-to-licenca')
+        return
+      }
+      ipcRenderer.invoke('license:startup-check').then(r => {
+        if (!r || !r.ok) {
+          window.ghzLicense.clearCache()
+          ipcRenderer.invoke('license:go-to-licenca')
+        }
+      }).catch(() => {})
+    })()
   </script>
 </head>
 <body>
