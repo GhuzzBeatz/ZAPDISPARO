@@ -12,6 +12,7 @@ const LICENSE_CACHE_MAX_MS = 48 * 60 * 60 * 1000
 
 module.exports = function setup(config) {
   const { app, ipcMain, getDataDir } = config
+  let sessionAuthorized = false
 
   // ── SUPABASE RPC ────────────────────────────────────────
   function supabaseRpc(fn, payload = {}) {
@@ -95,18 +96,20 @@ module.exports = function setup(config) {
     const k = String(key || '').trim().toUpperCase()
     const d = getDeviceInfo()
     const r = await supabaseRpc('ghz_activate_license', { p_license_key: k, p_device_hash: d.device_hash, p_device_name: d.device_name, p_device_os: d.device_os, p_app_version: d.app_version, p_customer_phone: String(phone || '') })
-    if (!r?.ok) { saveState({ active: false, license_key: k, last_error: r?.message || 'Licença inválida.' }); return r || { ok: false, message: 'Licença inválida.' } }
+    if (!r?.ok) { sessionAuthorized = false; saveState({ active: false, license_key: k, last_error: r?.message || 'Licença inválida.' }); return r || { ok: false, message: 'Licença inválida.' } }
     saveState({ active: true, license_key: k, customer_name: r.customer_name || '', activated_at: r.activated_at || new Date().toISOString(), last_validated_at: new Date().toISOString(), last_error: '' })
+    sessionAuthorized = true
     return r
   }
 
   async function validate() {
     const s = readState()
-    if (!s.license_key) return { ok: false, code: 'missing_license', message: 'Licença não ativada.' }
+    if (!s.license_key) { sessionAuthorized = false; return { ok: false, code: 'missing_license', message: 'Licença não ativada.' } }
     const d = getDeviceInfo()
     const r = await supabaseRpc('ghz_validate_license', { p_license_key: s.license_key, p_device_hash: d.device_hash, p_device_name: d.device_name, p_device_os: d.device_os, p_app_version: d.app_version })
-    if (!r?.ok) { saveState({ active: false, last_error: r?.message || 'Licença inválida.' }); return r || { ok: false, message: 'Licença inválida.' } }
+    if (!r?.ok) { sessionAuthorized = false; saveState({ active: false, last_error: r?.message || 'Licença inválida.' }); return r || { ok: false, message: 'Licença inválida.' } }
     saveState({ active: true, customer_name: r.customer_name || s.customer_name || '', last_validated_at: new Date().toISOString(), last_error: '' })
+    sessionAuthorized = true
     return r
   }
 
@@ -118,4 +121,9 @@ module.exports = function setup(config) {
   })
   ipcMain.handle('license:activate', async (e, { license_key, phone }) => activate(license_key, phone))
   ipcMain.handle('license:validate', async () => validate())
+
+  return {
+    validateForStartup: validate,
+    isSessionAuthorized: () => sessionAuthorized
+  }
 }
