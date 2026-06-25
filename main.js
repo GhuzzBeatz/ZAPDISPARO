@@ -937,10 +937,27 @@ function montarCandidatosTelefoneBr(valor) {
   return candidatos
 }
 
+function erroMotorWhatsAppIndisponivel(msg) {
+  const m = String(msg || '').toLowerCase()
+  return (
+    (m.includes('cannot read properties of undefined') && (
+      m.includes('getchat') ||
+      m.includes('sendmessage') ||
+      m.includes('getmessagemodel') ||
+      m.includes('sendseen')
+    )) ||
+    m.includes('window.wwebjs') ||
+    m.includes('wwebjs is not defined')
+  )
+}
+
 function traduzirErroEnvio(msg) {
   const original = String(msg || '').trim()
   const m = original.toLowerCase()
   if (!original) return 'Falha no envio.'
+  if (erroMotorWhatsAppIndisponivel(original)) {
+    return 'WhatsApp Web recarregou internamente no momento do envio. O app tentou recuperar; se continuar, reconecte o WhatsApp e tente novamente.'
+  }
   if (
     m.includes('detached frame') ||
     m.includes('frame was detached') ||
@@ -970,6 +987,7 @@ function traduzirErroEnvio(msg) {
 function erroTransitorioEnvio(msg) {
   const m = String(msg || '').toLowerCase()
   return (
+    erroMotorWhatsAppIndisponivel(msg) ||
     m.includes('detached frame') ||
     m.includes('frame was detached') ||
     m.includes('execution context was destroyed') ||
@@ -1100,6 +1118,84 @@ async function resolverChatIdContato(valorTelefone) {
   }
 
   return { ok: false, motivo: 'Numero nao encontrado no WhatsApp. Confira DDI/DDD e se o numero existe no app.' }
+}
+
+function normalizarChatIdGrupo(valor) {
+  const raw = String(valor?._serialized || valor || '').trim()
+  if (!raw) return ''
+  if (raw.endsWith('@g.us')) return raw
+  return ''
+}
+
+async function resolverChatIdGrupo(grupo) {
+  const nome = String(grupo?.nome || grupo?.name || 'Grupo').trim() || 'Grupo'
+  const idOriginal = normalizarChatIdGrupo(grupo?.id || grupo?.chatId || grupo)
+  if (!idOriginal) {
+    return { ok: false, motivo: 'ID do grupo invalido.', transitorio: false }
+  }
+
+  let ultimoErro = null
+  try {
+    const chat = await wClient.getChatById(idOriginal)
+    const chatIdConfirmado = normalizarChatIdGrupo(chat?.id?._serialized || chat?.id)
+    if (chat && (chat.isGroup || chatIdConfirmado)) {
+      return {
+        ok: true,
+        chatId: chatIdConfirmado || idOriginal,
+        nome: chat.name || nome
+      }
+    }
+  } catch (err) {
+    ultimoErro = err
+    if (erroTransitorioEnvio(err.message || String(err))) {
+      return {
+        ok: false,
+        motivo: traduzirErroEnvio(err.message || String(err)),
+        transitorio: true,
+        erroOriginal: err.message || String(err)
+      }
+    }
+  }
+
+  try {
+    const chats = await wClient.getChats()
+    const grupos = chats.filter(c => c.isGroup)
+    const porId = grupos.find(c => normalizarChatIdGrupo(c.id?._serialized || c.id) === idOriginal)
+    const porNome = grupos.find(c => String(c.name || '').trim() === nome)
+    const chat = porId || porNome
+    if (chat) {
+      return {
+        ok: true,
+        chatId: normalizarChatIdGrupo(chat.id?._serialized || chat.id) || idOriginal,
+        nome: chat.name || nome
+      }
+    }
+  } catch (err) {
+    ultimoErro = err
+    if (erroTransitorioEnvio(err.message || String(err))) {
+      return {
+        ok: false,
+        motivo: traduzirErroEnvio(err.message || String(err)),
+        transitorio: true,
+        erroOriginal: err.message || String(err)
+      }
+    }
+  }
+
+  if (ultimoErro) {
+    return {
+      ok: false,
+      motivo: traduzirErroEnvio(ultimoErro.message || String(ultimoErro)),
+      transitorio: erroTransitorioEnvio(ultimoErro.message || String(ultimoErro)),
+      erroOriginal: ultimoErro.message || String(ultimoErro)
+    }
+  }
+
+  return {
+    ok: false,
+    motivo: 'Grupo nao encontrado no WhatsApp. Clique em "Carregar Grupos" novamente e tente enviar outra vez.',
+    transitorio: false
+  }
 }
 
 async function enviarMensagemDireta(payload) {
@@ -1606,8 +1702,8 @@ async function iniciarDisparoGrupos(campanha) {
     if (!disparando) break
 
     const g = grupos[i]
-    const chatId = g.id
-    const nome = g.nome || 'Grupo'
+    let chatId = normalizarChatIdGrupo(g.id)
+    let nome = g.nome || 'Grupo'
 
     if (!chatId) {
       erros++
@@ -1629,6 +1725,21 @@ async function iniciarDisparoGrupos(campanha) {
       }
 
       try {
+        const resolucaoGrupo = await resolverChatIdGrupo(g)
+        if (!resolucaoGrupo.ok) {
+          ultimoMotivo = resolucaoGrupo.motivo
+          if (resolucaoGrupo.transitorio && tentativa < MAX_TENTATIVAS) {
+            addLog('aviso', `WhatsApp Web instavel ao abrir grupo ${nome}. Tentando novamente (${tentativa + 1}/${MAX_TENTATIVAS})...`)
+            await recuperarMotorEnvioWhatsApp('abrir grupo')
+            await sleep(3000)
+            continue
+          }
+          break
+        }
+
+        chatId = resolucaoGrupo.chatId
+        nome = resolucaoGrupo.nome || nome
+
         if (mediaParaEnvio) {
           await wClient.sendMessage(chatId, mediaParaEnvio, { caption: mensagem })
         } else {
@@ -1850,13 +1961,14 @@ ipcMain.handle('wpp:listarGrupos', async () => {
     const grupos = chats
       .filter(c => c.isGroup)
       .map(c => ({
-        id: c.id._serialized || c.id,
+        id: normalizarChatIdGrupo(c.id?._serialized || c.id),
         nome: c.name || 'Grupo sem nome',
         participantes: c.participants ? c.participants.length : 0
       }))
+      .filter(c => c.id)
     return { ok: true, grupos }
   } catch (err) {
-    return { ok: false, motivo: err.message || String(err) }
+    return { ok: false, motivo: traduzirErroEnvio(err.message || String(err)) }
   }
 })
 ipcMain.handle('hist:ler',         async ()        => lerJSON('historico', []))
